@@ -7,6 +7,7 @@ import ResponsiveLayout from "./components/Layout";
 import Dashboard from "./pages/dashboard";
 import Tests from "./pages/tests";
 import Settings from "./pages/Settings";
+import Practice from "./pages/Practice";
 import UserService from "./service/user.service";
 import { useDispatch } from "react-redux";
 
@@ -61,6 +62,15 @@ function App() {
           path="/tests"
           element={
             <ResponsiveLayout activePage={<Tests />} activeTab={"My Tests"} />
+          }
+        />
+        <Route
+          path="/practice"
+          element={
+            <ResponsiveLayout
+              activePage={<Practice />}
+              activeTab={"Practice"}
+            />
           }
         />
         <Route

@@ -1,5 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
+import { HeroImage } from "../assets";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -8,41 +9,34 @@ const Dashboard = () => {
     <div className="max-w-7xl mx-auto">
       {/* Hero Section */}
       <div className="bg-white rounded-2xl border border-gray-200 p-8 mb-8">
-        <div className="flex items-center justify-between">
-          <div className="flex-1 max-w-2xl">
-            <h1 className="text-5xl font-bold text-gray-900 mb-4 leading-tight">
+        <div className="row items-center justify-between">
+          <div className="col-lg-6 col-md-6 col-sm-12">
+            <h1 className="text-4xl font-[500] text-[#083156]  mb-4 leading-tight">
               Start your speaking journey today!
             </h1>
-            <p className="text-lg text-gray-600 mb-6 leading-relaxed">
+            <p className="text-lg text-[#3D4D5C] mb-6 leading-relaxed">
               Join hundreds of students who have improved their speaking skills.
             </p>
-            <button className="bg-yellow-400 hover:bg-yellow-500 text-white px-8 py-3 rounded-lg font-semibold transition-colors duration-200 shadow-lg hover:shadow-xl">
+            <button
+              onClick={() => navigate("/tests")}
+              className="bg-yellow-400 hover:bg-yellow-500 text-white px-6 py-2 rounded-lg font-semibold transition-colors duration-200 shadow-lg hover:shadow-xl"
+            >
               Explore
             </button>
           </div>
-          <div className="flex-1 flex justify-center">
-            <div className="relative">
-              {/* 3D Isometric Illustration Placeholder */}
-              <div className="w-80 h-80 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-3xl transform rotate-12 flex items-center justify-center shadow-2xl">
-                <div className="w-64 h-64 bg-white rounded-2xl transform -rotate-12 flex items-center justify-center">
-                  <div className="text-6xl">🎯</div>
-                </div>
-              </div>
-              {/* Floating elements */}
-              <div className="absolute -top-4 -right-4 w-12 h-12 bg-yellow-300 rounded-lg rotate-45"></div>
-              <div className="absolute -bottom-6 -left-6 w-8 h-8 bg-orange-400 rounded-full"></div>
-              <div className="absolute top-1/2 -left-8 w-6 h-6 bg-yellow-200 rounded-md rotate-12"></div>
-            </div>
+          <div className="col-lg-6 col-md-6 col-sm-12 py-3 flex items-center justify-center ">
+            {/* 3D Isometric Illustration - Man with megaphone */}
+            <img src={HeroImage} className="w-[70%]" alt="" />
           </div>
         </div>
       </div>
 
       {/* Practice Section */}
       <div className="mb-8">
-        <h2 className="text-4xl font-bold text-gray-900 mb-4">
+        <h1 className="text-4xl font-[500] text-[#083156]  mb-4 leading-tight">
           Do you want to practice?
-        </h2>
-        <p className="text-lg text-gray-600 mb-8">
+        </h1>
+        <p className="text-lg text-[#3D4D5C] mb-6 leading-relaxed">
           No problem! Practice with our collection of reference materials and
           practice exercises.
         </p>

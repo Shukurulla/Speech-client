@@ -17,6 +17,11 @@ const ResponsiveLayout = ({ activePage, activeTab }) => {
       path: "/tests",
     },
     {
+      label: "Practice",
+      icon: "🎯",
+      path: "/practice",
+    },
+    {
       label: "Settings",
       icon: "⚙️",
       path: "/settings",
@@ -72,7 +77,7 @@ const ResponsiveLayout = ({ activePage, activeTab }) => {
         <div className="flex items-center justify-between py-6 px-6 border-b border-gray-200">
           <div className="flex items-center space-x-2">
             <div className="w-8 h-8 bg-yellow-400 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">SC</span>
+              <span className="text-white font-bold text-sm">🔊</span>
             </div>
             <span className="text-xl font-semibold text-gray-900">
               SpeakingCube
