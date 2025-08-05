@@ -12,16 +12,6 @@ const ResponsiveLayout = ({ activePage, activeTab }) => {
       path: "/",
     },
     {
-      label: "My Tests",
-      icon: "📝",
-      path: "/tests",
-    },
-    {
-      label: "Practice",
-      icon: "🎯",
-      path: "/practice",
-    },
-    {
       label: "Settings",
       icon: "⚙️",
       path: "/settings",
@@ -69,7 +59,7 @@ const ResponsiveLayout = ({ activePage, activeTab }) => {
 
       {/* Sidebar */}
       <div
-        className={`fixed lg:static lg:translate-x-0 w-72 bg-white border-r border-gray-200 h-full z-40 transition-transform duration-300 ${
+        className={`fixed lg:static h-[100vh] lg:translate-x-0 w-72 bg-white border-r border-gray-200 z-40 transition-transform duration-300 ${
           isSidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -142,7 +132,7 @@ const ResponsiveLayout = ({ activePage, activeTab }) => {
 
       {/* Main Content */}
       <div className="flex-1 lg:ml-0">
-        <div className="p-4 lg:p-8 min-h-screen overflow-y-auto pt-16 lg:pt-8">
+        <div className="p-4 lg:p-8 h-[100vh] overflow-hidden overflow-y-scroll pt-16 lg:pt-8">
           {activePage}
         </div>
       </div>

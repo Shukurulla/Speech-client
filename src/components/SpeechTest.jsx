@@ -1,158 +1,51 @@
 import React, { useState, useRef, useEffect } from "react";
-import TestService from "../service/test.service";
 
-const SpeechTest = ({ testDetail, onNext, onBack, hasNext }) => {
+const SpeechTest = ({
+  testDetail,
+  onNext,
+  onBack,
+  hasNext,
+  onComplete,
+  questionNumber = 1,
+  totalQuestions = 1,
+}) => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordedText, setRecordedText] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [score, setScore] = useState(null);
-  const [timeLeft, setTimeLeft] = useState(15);
+  const [timeLeft, setTimeLeft] = useState(30);
   const [testPhase, setTestPhase] = useState("ready"); // ready, recording, completed
   const [audioBlob, setAudioBlob] = useState(null);
   const [showResults, setShowResults] = useState(false);
   const [microphonePermission, setMicrophonePermission] = useState(null);
   const [showQuitModal, setShowQuitModal] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [debugLog, setDebugLog] = useState([]);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const recognitionRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const timerRef = useRef(null);
-
-  // Debug logging function
-  const addDebugLog = (message) => {
-    const timestamp = new Date().toLocaleTimeString();
-    setDebugLog((prev) => [...prev, `${timestamp}: ${message}`]);
-    console.log(`[DEBUG] ${timestamp}: ${message}`);
-  };
+  const finalTranscriptRef = useRef("");
 
   // Check microphone permission on component mount
   useEffect(() => {
-    addDebugLog("Component mounted, checking microphone permission");
     checkMicrophonePermission();
+    initializeSpeechRecognition();
+
+    return () => {
+      // Cleanup
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch (e) {
+          console.log("Recognition cleanup:", e);
+        }
+      }
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+    };
   }, []);
-
-  // Check browser support
-  useEffect(() => {
-    if ("webkitSpeechRecognition" in window) {
-      addDebugLog("webkitSpeechRecognition supported");
-    } else if ("SpeechRecognition" in window) {
-      addDebugLog("SpeechRecognition supported");
-    } else {
-      addDebugLog("Speech Recognition NOT supported");
-    }
-
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      addDebugLog("getUserMedia supported");
-    } else {
-      addDebugLog("getUserMedia NOT supported");
-    }
-  }, []);
-
-  const checkMicrophonePermission = async () => {
-    try {
-      addDebugLog("Requesting microphone access...");
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      setMicrophonePermission("granted");
-      addDebugLog("Microphone permission granted");
-
-      // Stop the stream
-      stream.getTracks().forEach((track) => {
-        track.stop();
-        addDebugLog(`Audio track stopped: ${track.label}`);
-      });
-    } catch (error) {
-      addDebugLog(
-        `Microphone permission error: ${error.name} - ${error.message}`
-      );
-      setMicrophonePermission("denied");
-    }
-  };
-
-  // Initialize Speech Recognition
-  useEffect(() => {
-    if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
-      const SpeechRecognition =
-        window.SpeechRecognition || window.webkitSpeechRecognition;
-      recognitionRef.current = new SpeechRecognition();
-
-      recognitionRef.current.continuous = true;
-      recognitionRef.current.interimResults = true;
-      recognitionRef.current.lang = "en-US";
-      recognitionRef.current.maxAlternatives = 1;
-
-      recognitionRef.current.onstart = () => {
-        addDebugLog("Speech recognition started");
-        setIsListening(true);
-      };
-
-      recognitionRef.current.onresult = (event) => {
-        addDebugLog(
-          `Speech recognition result event: ${event.results.length} results`
-        );
-
-        let finalTranscript = "";
-        let interimTranscript = "";
-
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript;
-          const confidence = event.results[i][0].confidence;
-
-          addDebugLog(
-            `Result ${i}: "${transcript}" (confidence: ${confidence}, final: ${event.results[i].isFinal})`
-          );
-
-          if (event.results[i].isFinal) {
-            finalTranscript += transcript;
-          } else {
-            interimTranscript += transcript;
-          }
-        }
-
-        if (finalTranscript) {
-          setRecordedText((prev) => {
-            const newText = (prev + " " + finalTranscript).trim();
-            addDebugLog(`Final transcript updated: "${newText}"`);
-            return newText;
-          });
-        }
-      };
-
-      recognitionRef.current.onerror = (event) => {
-        addDebugLog(`Speech recognition error: ${event.error}`);
-        if (event.error === "not-allowed") {
-          setMicrophonePermission("denied");
-        }
-      };
-
-      recognitionRef.current.onend = () => {
-        addDebugLog("Speech recognition ended");
-        setIsListening(false);
-
-        // Restart if still recording
-        if (testPhase === "recording") {
-          addDebugLog("Attempting to restart speech recognition...");
-          setTimeout(() => {
-            try {
-              if (recognitionRef.current && testPhase === "recording") {
-                recognitionRef.current.start();
-                addDebugLog("Speech recognition restarted successfully");
-              }
-            } catch (error) {
-              addDebugLog(
-                `Failed to restart speech recognition: ${error.message}`
-              );
-            }
-          }, 100);
-        }
-      };
-
-      addDebugLog("Speech recognition initialized");
-    } else {
-      addDebugLog("Speech recognition not supported in this browser");
-    }
-  }, [testPhase]);
 
   // Timer countdown
   useEffect(() => {
@@ -161,32 +54,105 @@ const SpeechTest = ({ testDetail, onNext, onBack, hasNext }) => {
         setTimeLeft(timeLeft - 1);
       }, 1000);
     } else if (timeLeft === 0 && testPhase === "recording") {
-      addDebugLog("Timer finished, stopping recording");
       stopRecording();
     }
     return () => clearTimeout(timerRef.current);
   }, [timeLeft, testPhase]);
 
+  const checkMicrophonePermission = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      setMicrophonePermission("granted");
+      // Stop the stream immediately
+      stream.getTracks().forEach((track) => track.stop());
+    } catch (error) {
+      console.error("Microphone permission error:", error);
+      setMicrophonePermission("denied");
+    }
+  };
+
+  const initializeSpeechRecognition = () => {
+    if (
+      !("webkitSpeechRecognition" in window) &&
+      !("SpeechRecognition" in window)
+    ) {
+      console.error("Speech recognition not supported");
+      return;
+    }
+
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognitionRef.current = new SpeechRecognition();
+
+    const recognition = recognitionRef.current;
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+      console.log("Speech recognition started");
+      setIsListening(true);
+    };
+
+    recognition.onresult = (event) => {
+      let interimTranscript = "";
+      let finalTranscript = finalTranscriptRef.current;
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript + " ";
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+
+      finalTranscriptRef.current = finalTranscript;
+      setRecordedText(finalTranscript + interimTranscript);
+    };
+
+    recognition.onerror = (event) => {
+      console.error("Speech recognition error:", event.error);
+      if (event.error === "not-allowed") {
+        setMicrophonePermission("denied");
+      }
+    };
+
+    recognition.onend = () => {
+      console.log("Speech recognition ended");
+      setIsListening(false);
+
+      // Auto-restart if still recording
+      if (testPhase === "recording") {
+        try {
+          setTimeout(() => {
+            if (recognitionRef.current && testPhase === "recording") {
+              recognitionRef.current.start();
+            }
+          }, 100);
+        } catch (error) {
+          console.error("Failed to restart recognition:", error);
+        }
+      }
+    };
+  };
+
   const requestMicrophonePermission = async () => {
     try {
-      addDebugLog("Requesting microphone permission manually...");
       await navigator.mediaDevices.getUserMedia({ audio: true });
       setMicrophonePermission("granted");
-      addDebugLog("Permission granted, reloading page...");
       window.location.reload();
     } catch (error) {
-      addDebugLog(`Permission denied: ${error.message}`);
       setMicrophonePermission("denied");
       alert(
-        "Mikrofonga ruxsat berilmadi. Iltimos, brauzer sozlamalaridan mikrofonga ruxsat bering va sahifani qayta yuklang."
+        "Mikrofonga ruxsat berilmadi. Iltimos, brauzer sozlamalaridan mikrofonga ruxsat bering."
       );
     }
   };
 
-  // Text-to-Speech for sample
   const playExampleAudio = () => {
-    addDebugLog("Playing sample audio...");
-
     if (speechSynthesis.speaking) {
       speechSynthesis.cancel();
     }
@@ -197,48 +163,24 @@ const SpeechTest = ({ testDetail, onNext, onBack, hasNext }) => {
     utterance.pitch = 1;
     utterance.volume = 1;
 
-    utterance.onstart = () => {
-      addDebugLog("Sample audio started playing");
-    };
-
-    utterance.onend = () => {
-      addDebugLog("Sample audio finished playing");
-    };
-
-    utterance.onerror = (event) => {
-      addDebugLog(`Sample audio error: ${event.error}`);
-    };
-
     speechSynthesis.speak(utterance);
   };
 
-  // Start recording
   const startRecording = async () => {
-    addDebugLog("Start recording button clicked");
-
     if (microphonePermission !== "granted") {
-      addDebugLog("Microphone permission not granted, requesting...");
-      const userConfirmed = confirm(
-        "Mikrofon ruxsati kerak. Ruxsat berasizmi?"
-      );
-      if (userConfirmed) {
-        await requestMicrophonePermission();
-        return;
-      } else {
-        addDebugLog("User declined microphone permission");
-        return;
-      }
+      await requestMicrophonePermission();
+      return;
     }
 
     try {
-      addDebugLog("Starting recording process...");
       setTestPhase("recording");
-      setTimeLeft(15);
+      setTimeLeft(30);
       setRecordedText("");
+      finalTranscriptRef.current = "";
       setIsRecording(true);
+      setIsProcessing(false);
 
       // Start audio recording
-      addDebugLog("Requesting audio stream...");
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -247,50 +189,37 @@ const SpeechTest = ({ testDetail, onNext, onBack, hasNext }) => {
         },
       });
 
-      addDebugLog(
-        `Audio stream obtained with ${
-          stream.getAudioTracks().length
-        } audio tracks`
-      );
-
       mediaRecorderRef.current = new MediaRecorder(stream);
       audioChunksRef.current = [];
 
       mediaRecorderRef.current.ondataavailable = (event) => {
         if (event.data.size > 0) {
           audioChunksRef.current.push(event.data);
-          addDebugLog(`Audio data chunk received: ${event.data.size} bytes`);
         }
       };
 
       mediaRecorderRef.current.onstop = () => {
-        addDebugLog("Media recorder stopped");
         const audioBlob = new Blob(audioChunksRef.current, {
           type: "audio/webm",
         });
         setAudioBlob(audioBlob);
-        addDebugLog(`Audio blob created: ${audioBlob.size} bytes`);
         stream.getTracks().forEach((track) => track.stop());
       };
 
       mediaRecorderRef.current.start(100);
-      addDebugLog("Media recorder started");
 
       // Start speech recognition
       setTimeout(() => {
         if (recognitionRef.current) {
           try {
-            addDebugLog("Starting speech recognition...");
             recognitionRef.current.start();
           } catch (error) {
-            addDebugLog(`Error starting speech recognition: ${error.message}`);
+            console.error("Error starting speech recognition:", error);
           }
-        } else {
-          addDebugLog("Speech recognition not available");
         }
       }, 500);
     } catch (error) {
-      addDebugLog(`Error in startRecording: ${error.message}`);
+      console.error("Error starting recording:", error);
       alert(
         "Mikrofon ishlatishda xatolik yuz berdi. Iltimos, qaytadan urinib ko'ring."
       );
@@ -299,98 +228,153 @@ const SpeechTest = ({ testDetail, onNext, onBack, hasNext }) => {
     }
   };
 
-  // Stop recording
   const stopRecording = async () => {
-    addDebugLog("Stopping recording...");
+    console.log("Stopping recording...");
     setIsRecording(false);
     setIsListening(false);
     setTestPhase("completed");
+    setIsProcessing(true);
 
+    // Stop speech recognition
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
-        addDebugLog("Speech recognition stopped");
       } catch (error) {
-        addDebugLog(`Error stopping speech recognition: ${error.message}`);
+        console.error("Error stopping speech recognition:", error);
       }
     }
 
+    // Stop media recorder
     if (
       mediaRecorderRef.current &&
       mediaRecorderRef.current.state !== "inactive"
     ) {
       try {
         mediaRecorderRef.current.stop();
-        addDebugLog("Media recorder stopped");
       } catch (error) {
-        addDebugLog(`Error stopping media recorder: ${error.message}`);
+        console.error("Error stopping media recorder:", error);
       }
     }
 
-    // Wait for final transcription
+    // Wait a bit for final transcription
     setTimeout(() => {
-      addDebugLog(`Final recorded text: "${recordedText}"`);
+      const finalText = finalTranscriptRef.current.trim();
+      setRecordedText(finalText);
+
       const calculatedScore = calculateSimilarityScore(
         testDetail.text,
-        recordedText
+        finalText
       );
-      addDebugLog(`Calculated score: ${calculatedScore}`);
       setScore(calculatedScore);
       setShowResults(true);
+      setIsProcessing(false);
+
+      // Call onComplete callback if provided
+      if (onComplete) {
+        onComplete(testDetail._id, calculatedScore, finalText);
+      }
     }, 1000);
   };
 
-  // Play recorded audio
   const playRecordedAudio = () => {
     if (audioBlob) {
-      addDebugLog("Playing recorded audio...");
       const audioUrl = URL.createObjectURL(audioBlob);
       const audio = new Audio(audioUrl);
-      audio.play();
-    } else {
-      addDebugLog("No audio blob available");
+      audio.play().catch((error) => {
+        console.error("Error playing audio:", error);
+      });
     }
   };
 
-  // Calculate similarity score
   const calculateSimilarityScore = (original, spoken) => {
     if (!spoken || !spoken.trim()) {
-      addDebugLog("No spoken text provided for scoring");
       return 0;
     }
 
-    const originalWords = original.toLowerCase().split(/\s+/);
-    const spokenWords = spoken.toLowerCase().split(/\s+/);
+    const originalWords = original
+      .toLowerCase()
+      .replace(/[^\w\s]/g, "")
+      .split(/\s+/)
+      .filter((word) => word.length > 0);
 
-    let matches = 0;
-    const totalWords = originalWords.length;
+    const spokenWords = spoken
+      .toLowerCase()
+      .replace(/[^\w\s]/g, "")
+      .split(/\s+/)
+      .filter((word) => word.length > 0);
 
-    originalWords.forEach((word) => {
-      if (
-        spokenWords.some(
-          (spokenWord) => spokenWord.includes(word) || word.includes(spokenWord)
-        )
-      ) {
-        matches++;
+    if (originalWords.length === 0) return 0;
+
+    let exactMatches = 0;
+    let partialMatches = 0;
+
+    originalWords.forEach((originalWord) => {
+      const exactMatch = spokenWords.find(
+        (spokenWord) => spokenWord === originalWord
+      );
+
+      if (exactMatch) {
+        exactMatches++;
+      } else {
+        const partialMatch = spokenWords.find((spokenWord) => {
+          return (
+            spokenWord.includes(originalWord) ||
+            originalWord.includes(spokenWord) ||
+            levenshteinDistance(originalWord, spokenWord) <= 2
+          );
+        });
+
+        if (partialMatch) {
+          partialMatches++;
+        }
       }
     });
 
-    const accuracyScore = (matches / totalWords) * 100;
-    const lengthFactor = Math.min(spokenWords.length / totalWords, 1);
-    const finalScore = Math.round(accuracyScore * lengthFactor);
+    // Calculate scores
+    const exactScore = (exactMatches / originalWords.length) * 100;
+    const partialScore = (partialMatches / originalWords.length) * 30;
 
-    return Math.min(finalScore, 100);
+    // Length factor
+    const lengthRatio = spokenWords.length / originalWords.length;
+    const lengthFactor = lengthRatio > 1.5 || lengthRatio < 0.5 ? 0.8 : 1;
+
+    const finalScore = Math.round((exactScore + partialScore) * lengthFactor);
+    return Math.max(0, Math.min(100, finalScore));
+  };
+
+  const levenshteinDistance = (str1, str2) => {
+    const matrix = [];
+    for (let i = 0; i <= str2.length; i++) {
+      matrix[i] = [i];
+    }
+    for (let j = 0; j <= str1.length; j++) {
+      matrix[0][j] = j;
+    }
+    for (let i = 1; i <= str2.length; i++) {
+      for (let j = 1; j <= str1.length; j++) {
+        if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+          matrix[i][j] = matrix[i - 1][j - 1];
+        } else {
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j - 1] + 1,
+            matrix[i][j - 1] + 1,
+            matrix[i - 1][j] + 1
+          );
+        }
+      }
+    }
+    return matrix[str2.length][str1.length];
   };
 
   const resetTest = () => {
-    addDebugLog("Resetting test...");
     setTestPhase("ready");
     setRecordedText("");
+    finalTranscriptRef.current = "";
     setScore(null);
-    setTimeLeft(15);
+    setTimeLeft(30);
     setAudioBlob(null);
     setShowResults(false);
-    setDebugLog([]);
+    setIsProcessing(false);
   };
 
   const handleQuit = () => {
@@ -457,7 +441,11 @@ const SpeechTest = ({ testDetail, onNext, onBack, hasNext }) => {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <div className="text-2xl font-bold text-gray-900">
-                0:{timeLeft.toString().padStart(2, "0")}
+                Question {questionNumber} of {totalQuestions}
+              </div>
+              <div className="text-lg font-medium text-gray-600">
+                {Math.floor(timeLeft / 60)}:
+                {(timeLeft % 60).toString().padStart(2, "0")}
               </div>
             </div>
             <button
@@ -475,20 +463,8 @@ const SpeechTest = ({ testDetail, onNext, onBack, hasNext }) => {
             <div className="w-full bg-yellow-200 rounded-full h-2">
               <div
                 className="bg-yellow-400 h-2 rounded-full transition-all duration-1000"
-                style={{ width: `${((15 - timeLeft) / 15) * 100}%` }}
+                style={{ width: `${((30 - timeLeft) / 30) * 100}%` }}
               ></div>
-            </div>
-          </div>
-        )}
-
-        {/* Debug Panel - Only show in development */}
-        {process.env.NODE_ENV === "development" && (
-          <div className="bg-gray-100 p-4 border-b max-h-40 overflow-y-auto">
-            <h3 className="font-bold mb-2">Debug Log:</h3>
-            <div className="text-xs space-y-1">
-              {debugLog.slice(-10).map((log, index) => (
-                <div key={index}>{log}</div>
-              ))}
             </div>
           </div>
         )}
@@ -497,39 +473,14 @@ const SpeechTest = ({ testDetail, onNext, onBack, hasNext }) => {
         <div className="px-8 py-8">
           <div className="text-center mb-8">
             <h2 className="text-xl font-semibold text-gray-900 mb-6">
-              Record yourself saying the statement below.
+              {testDetail.condition}
             </h2>
-
-            {/* Character illustration */}
-            <div className="flex justify-center mb-6">
-              <div className="w-20 h-20 bg-blue-900 rounded-full flex items-center justify-center relative">
-                <div className="w-16 h-16 bg-yellow-600 rounded-full flex items-center justify-center">
-                  <div className="w-12 h-12 bg-blue-900 rounded-full"></div>
-                </div>
-                <div className="absolute -right-2 top-4">
-                  <div className="w-1 h-3 bg-gray-400 rounded mb-1"></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded mb-1"></div>
-                  <div className="w-1 h-1 bg-gray-400 rounded"></div>
-                </div>
-              </div>
-            </div>
 
             {/* Test Text */}
             <div className="bg-gray-50 rounded-xl p-6 mb-8 max-w-2xl mx-auto">
               <p className="text-xl text-gray-900 leading-relaxed font-medium">
                 "{testDetail.text}"
               </p>
-            </div>
-          </div>
-
-          {/* Status Information */}
-          <div className="mb-6 text-center">
-            <div className="text-sm text-gray-600 space-y-1">
-              <p>Microphone: {microphonePermission || "checking..."}</p>
-              <p>Listening: {isListening ? "Yes" : "No"}</p>
-              <p>Recording: {isRecording ? "Yes" : "No"}</p>
-              <p>Phase: {testPhase}</p>
-              <p>Recorded text length: {recordedText.length} characters</p>
             </div>
           </div>
 
@@ -542,15 +493,18 @@ const SpeechTest = ({ testDetail, onNext, onBack, hasNext }) => {
                   className="flex items-center space-x-2 px-6 py-3 bg-white border-2 border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
                 >
                   <span>🔊</span>
-                  <span>Sample</span>
+                  <span>Listen to Sample</span>
                 </button>
               </div>
               <button
                 onClick={startRecording}
                 className="px-8 py-3 bg-yellow-400 text-white rounded-lg font-semibold hover:bg-yellow-500 transition-colors"
               >
-                Recording now
+                Start Recording
               </button>
+              <p className="text-sm text-gray-500">
+                You'll have 30 seconds to speak
+              </p>
             </div>
           )}
 
@@ -558,8 +512,8 @@ const SpeechTest = ({ testDetail, onNext, onBack, hasNext }) => {
           {testPhase === "recording" && (
             <div className="text-center">
               <div className="flex justify-center mb-6">
-                <div className="flex items-center space-x-2 text-blue-600">
-                  <div className="w-3 h-3 bg-blue-600 rounded-full animate-pulse"></div>
+                <div className="flex items-center space-x-2 text-red-600">
+                  <div className="w-3 h-3 bg-red-600 rounded-full animate-pulse"></div>
                   <span className="font-semibold">RECORDING...</span>
                 </div>
               </div>
@@ -569,7 +523,7 @@ const SpeechTest = ({ testDetail, onNext, onBack, hasNext }) => {
                 {[...Array(15)].map((_, i) => (
                   <div
                     key={i}
-                    className="w-1 bg-blue-600 rounded-full animate-pulse"
+                    className="w-1 bg-red-600 rounded-full animate-pulse"
                     style={{
                       height: `${Math.random() * 30 + 10}px`,
                       animationDelay: `${i * 0.1}s`,
@@ -578,28 +532,29 @@ const SpeechTest = ({ testDetail, onNext, onBack, hasNext }) => {
                 ))}
               </div>
 
-              {/* Show transcribed text */}
-              {(recordedText || isListening) && (
+              {/* Live Transcription */}
+              {recordedText && (
                 <div className="bg-blue-50 rounded-lg p-4 mb-6 max-w-2xl mx-auto">
                   <p className="text-blue-800">
-                    {isListening && !recordedText && (
-                      <span className="italic">Listening...</span>
-                    )}
-                    {recordedText && (
-                      <span>
-                        <strong>Transcribing:</strong> "{recordedText}"
-                      </span>
-                    )}
+                    <strong>Live transcription:</strong> "{recordedText}"
                   </p>
                 </div>
               )}
 
               <button
                 onClick={stopRecording}
-                className="px-8 py-3 bg-yellow-400 text-white rounded-lg font-semibold hover:bg-yellow-500 transition-colors"
+                className="px-8 py-3 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-colors"
               >
-                Next
+                Stop Recording
               </button>
+            </div>
+          )}
+
+          {/* Processing State */}
+          {isProcessing && (
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Processing your recording...</p>
             </div>
           )}
 
@@ -608,7 +563,7 @@ const SpeechTest = ({ testDetail, onNext, onBack, hasNext }) => {
             <div className="bg-green-50 rounded-xl p-6">
               <div className="text-center mb-6">
                 <h3 className="text-xl font-semibold text-green-800 mb-2">
-                  Question completed! Review the sample answer.
+                  Recording completed!
                 </h3>
               </div>
 
@@ -660,17 +615,24 @@ const SpeechTest = ({ testDetail, onNext, onBack, hasNext }) => {
                 <button
                   onClick={playRecordedAudio}
                   disabled={!audioBlob}
-                  className="flex items-center space-x-2 px-6 py-3 bg-white border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center space-x-2 px-6 py-3 bg-white border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
                 >
                   <span>📊</span>
                   <span>Your recording</span>
                 </button>
 
                 <button
+                  onClick={resetTest}
+                  className="px-6 py-3 bg-gray-600 text-white rounded-lg font-semibold hover:bg-gray-700 transition-colors"
+                >
+                  Try Again
+                </button>
+
+                <button
                   onClick={hasNext ? onNext : onBack}
                   className="px-8 py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors"
                 >
-                  Continue
+                  {hasNext ? "Next Question" : "Complete Test"}
                 </button>
               </div>
             </div>

@@ -234,13 +234,98 @@ const AdminLessons = () => {
     </AdminLayout>
   );
 };
+const DictionaryModal = ({ setState, setFormData, lesson }) => {
+  const [uz, setUz] = useState("");
+  const [en, setEn] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const { data } = await axios.post(
+        `/lesson/${lesson._id}/create-dictionary`,
+        { uz, en }
+      );
+      if (data.status == "success") {
+        setState("");
+        toast.success("Dictionary added successfully");
+      }
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <form onSubmit={onSubmit} className="p-6 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                English *
+              </label>
+              <input
+                type="text"
+                value={en}
+                onChange={(e) => setEn(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                placeholder="English"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Uzbek *
+              </label>
+              <input
+                type="text"
+                value={uz}
+                onChange={(e) => setUz(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                placeholder="Uzbek"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="flex space-x-4">
+            <div
+              onClick={() => setState("")}
+              className="flex-1 px-4 py-2 border text-center cursor-pointer border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </div>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+            >
+              {"Create"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
 
 const LessonCard = ({ lesson, onEdit, onDelete, onDeleteAudio }) => {
   const [showAudioFiles, setShowAudioFiles] = useState(false);
+  const [dictionaryModal, setDictionaryModal] = useState("");
+
+  useEffect(() => {
+    console.log(dictionaryModal);
+  }, [dictionaryModal]);
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
       <div className="flex items-start justify-between mb-4">
+        {dictionaryModal ? (
+          <DictionaryModal setState={setDictionaryModal} lesson={lesson} />
+        ) : (
+          ""
+        )}
         <div className="flex items-center space-x-4">
           <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
             <span className="text-blue-600 text-xl font-bold">
@@ -257,6 +342,12 @@ const LessonCard = ({ lesson, onEdit, onDelete, onDeleteAudio }) => {
           </div>
         </div>
         <div className="flex space-x-2">
+          <button
+            className="text-gray-600 px-2 rounded-md border"
+            onClick={() => setDictionaryModal(true)}
+          >
+            Aa
+          </button>
           <button
             onClick={() => onEdit(lesson)}
             className="text-blue-600 hover:text-blue-700 p-2"
@@ -333,9 +424,7 @@ const LessonCard = ({ lesson, onEdit, onDelete, onDeleteAudio }) => {
                   </div>
                   <div className="flex space-x-2">
                     <audio controls className="h-8">
-                      <source
-                        src={`/api/lesson/${lesson._id}/audio/${file.filename}`}
-                      />
+                      <source src={file.url} />
                     </audio>
                     <button
                       onClick={() => onDeleteAudio(lesson._id, file._id)}

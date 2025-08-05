@@ -5,9 +5,10 @@ import Register from "./pages/register";
 import { Toaster } from "react-hot-toast";
 import ResponsiveLayout from "./components/Layout";
 import Dashboard from "./pages/dashboard";
-import Tests from "./pages/tests";
 import Settings from "./pages/Settings";
-import Practice from "./pages/Practice";
+import GradeLessons from "./pages/GradeLessons";
+import LessonTests from "./pages/LessonTests";
+import TestQuestions from "./pages/TestQuestions.jsx";
 import UserService from "./service/user.service";
 import { useDispatch, useSelector } from "react-redux";
 
@@ -105,6 +106,7 @@ function App() {
     <>
       <Toaster position="top-right" />
       <Routes>
+        {/* Dashboard - Main page with grades */}
         <Route
           path="/"
           element={
@@ -114,21 +116,17 @@ function App() {
             />
           }
         />
-        <Route
-          path="/tests"
-          element={
-            <ResponsiveLayout activePage={<Tests />} activeTab={"My Tests"} />
-          }
-        />
-        <Route
-          path="/practice"
-          element={
-            <ResponsiveLayout
-              activePage={<Practice />}
-              activeTab={"Practice"}
-            />
-          }
-        />
+
+        {/* Grade Lessons - Shows lessons for selected grade */}
+        <Route path="/grade/:gradeId" element={<GradeLessons />} />
+
+        {/* Lesson Tests - Shows tests for selected lesson */}
+        <Route path="/lesson/:lessonId/tests" element={<LessonTests />} />
+
+        {/* Test Questions - Shows questions for selected test */}
+        <Route path="/test/:testId" element={<TestQuestions />} />
+
+        {/* Settings */}
         <Route
           path="/settings"
           element={

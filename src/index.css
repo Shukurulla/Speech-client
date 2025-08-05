@@ -81,7 +81,16 @@ body {
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.18);
 }
-
+select {
+  color: #000 !important;
+}
+textarea {
+  color: #000 !important;
+}
+input,
+textarea {
+  outline: none;
+}
 .card-hover {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
