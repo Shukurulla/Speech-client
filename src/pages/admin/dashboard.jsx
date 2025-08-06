@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import AdminLayout from "../../components/admin/AdminLayout";
 import axios from "../../service/api";
+import { FiActivity, FiBook, FiBookOpen, FiUsers } from "react-icons/fi";
 
 const AdminDashboard = () => {
   const [dashboardData, setDashboardData] = useState(null);
@@ -49,25 +50,25 @@ const AdminDashboard = () => {
           <StatCard
             title="Total Students"
             value={stats.totalUsers || 0}
-            icon="👥"
+            icon={<FiUsers />}
             color="bg-blue-500"
           />
           <StatCard
             title="Grades"
             value={stats.totalGrades || 0}
-            icon="📚"
+            icon={<FiBook />}
             color="bg-green-500"
           />
           <StatCard
             title="Lessons"
             value={stats.totalLessons || 0}
-            icon="📖"
+            icon={<FiBookOpen />}
             color="bg-purple-500"
           />
           <StatCard
             title="Test Results"
             value={stats.totalTests || 0}
-            icon="📈"
+            icon={<FiActivity />}
             color="bg-orange-500"
           />
         </div>

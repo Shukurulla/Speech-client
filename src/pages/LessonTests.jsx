@@ -3,6 +3,14 @@ import { useParams, useLocation, useNavigate } from "react-router-dom";
 import TestService from "../service/test.service";
 import ResponsiveLayout from "../components/Layout";
 import { toast } from "react-hot-toast";
+import {
+  FiBookOpen,
+  FiCamera,
+  FiCheck,
+  FiMessageSquare,
+  FiMic,
+  FiPaperclip,
+} from "react-icons/fi";
 
 const LessonTests = () => {
   const { lessonId } = useParams();
@@ -115,7 +123,7 @@ const LessonTests = () => {
               </div>
               <div className="ml-4">
                 <h3 className="text-lg font-semibold text-green-800">
-                  🎉 Test Completed Successfully!
+                  <FiCheck /> Test Completed Successfully!
                 </h3>
                 <div className="mt-2 text-green-700">
                   <p>
@@ -190,17 +198,16 @@ const TestCard = ({ test, onSelect }) => {
   const getCategoryIcon = (categoryTitle) => {
     switch (categoryTitle) {
       case "Read Aloud":
-        return "🎤";
+        return <FiMic color="black" />;
       case "Read, then Speak":
-        return "📖";
+        return <FiBookOpen />;
       case "Speaking Sample":
-        return "💬";
+        return <FiMessageSquare />;
       case "Speak about the Photo":
-        return "📷";
-      case "Listen, then Speak":
-        return "👂";
+        return <FiCamera />;
+
       default:
-        return "📝";
+        return <FiPaperclip />;
     }
   };
 

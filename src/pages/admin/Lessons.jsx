@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import AdminLayout from "../../components/admin/AdminLayout";
 import axios from "../../service/api";
 import { toast } from "react-hot-toast";
+import { FiBook, FiMusic } from "react-icons/fi";
 
 const AdminLessons = () => {
   const [lessons, setLessons] = useState([]);
@@ -17,6 +18,8 @@ const AdminLessons = () => {
     orderNumber: "",
   });
   const [audioFiles, setAudioFiles] = useState([]);
+  const [showDictionaryModal, setShowDictionaryModal] = useState("");
+  const [selectedLesson, setSelectedLesson] = useState(null);
 
   useEffect(() => {
     fetchGrades();
@@ -140,6 +143,11 @@ const AdminLessons = () => {
     setShowModal(true);
   };
 
+  const handleDictionaryClick = (lesson) => {
+    setSelectedLesson(lesson);
+    setShowDictionaryModal("list");
+  };
+
   return (
     <AdminLayout>
       <div className="max-w-7xl mx-auto">
@@ -194,6 +202,7 @@ const AdminLessons = () => {
                 onEdit={handleEdit}
                 onDelete={handleDelete}
                 onDeleteAudio={handleDeleteAudioFile}
+                onDictionaryClick={handleDictionaryClick}
               />
             ))
           ) : (
@@ -216,7 +225,7 @@ const AdminLessons = () => {
           )}
         </div>
 
-        {/* Modal */}
+        {/* Lesson Modal */}
         {showModal && (
           <LessonModal
             lesson={editingLesson}
@@ -230,102 +239,294 @@ const AdminLessons = () => {
             onClose={() => setShowModal(false)}
           />
         )}
+
+        {/* Dictionary Modal */}
+        {showDictionaryModal && (
+          <DictionaryModal
+            lesson={selectedLesson}
+            modalType={showDictionaryModal}
+            onClose={() => {
+              setShowDictionaryModal("");
+              setSelectedLesson(null);
+              fetchLessons(); // Refresh lessons to show updated dictionaries
+            }}
+          />
+        )}
       </div>
     </AdminLayout>
   );
 };
-const DictionaryModal = ({ setState, setFormData, lesson }) => {
-  const [uz, setUz] = useState("");
-  const [en, setEn] = useState("");
+
+const DictionaryModal = ({ lesson, modalType, onClose }) => {
+  const [dictionaries, setDictionaries] = useState([]);
+  const [formData, setFormData] = useState({ en: "", uz: "" });
+  const [editingDictionary, setEditingDictionary] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const onSubmit = async (e) => {
+  useEffect(() => {
+    if (lesson && lesson.dictionaries) {
+      setDictionaries(lesson.dictionaries);
+    }
+  }, [lesson]);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!formData.en || !formData.uz) {
+      toast.error("Both English and Uzbek words are required");
+      return;
+    }
+
+    setIsLoading(true);
     try {
-      const { data } = await axios.post(
-        `/lesson/${lesson._id}/create-dictionary`,
-        { uz, en }
-      );
-      if (data.status == "success") {
-        setState("");
+      if (editingDictionary) {
+        await axios.put(
+          `/lesson/${lesson._id}/dictionary/${editingDictionary._id}`,
+          formData
+        );
+        toast.success("Dictionary updated successfully");
+      } else {
+        await axios.post(`/lesson/${lesson._id}/create-dictionary`, formData);
         toast.success("Dictionary added successfully");
       }
+
+      // Refresh lesson data
+      const { data } = await axios.get(`/lesson/${lesson._id}`);
+      setDictionaries(data.data.dictionaries || []);
+
+      setFormData({ en: "", uz: "" });
+      setEditingDictionary(null);
     } catch (error) {
-      console.log(error);
+      toast.error(error.response?.data?.message || "Operation failed");
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  const handleEdit = (dictionary) => {
+    setEditingDictionary(dictionary);
+    setFormData({ en: dictionary.en, uz: dictionary.uz });
+  };
+
+  const handleDelete = async (dictionaryId) => {
+    if (
+      window.confirm("Are you sure you want to delete this dictionary entry?")
+    ) {
+      try {
+        await axios.delete(`/lesson/${lesson._id}/dictionary/${dictionaryId}`);
+        toast.success("Dictionary deleted successfully");
+
+        // Refresh lesson data
+        const { data } = await axios.get(`/lesson/${lesson._id}`);
+        setDictionaries(data.data.dictionaries || []);
+      } catch (error) {
+        toast.error("Failed to delete dictionary");
+      }
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({ en: "", uz: "" });
+    setEditingDictionary(null);
   };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <form onSubmit={onSubmit} className="p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center justify-between">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                English *
-              </label>
-              <input
-                type="text"
-                value={en}
-                onChange={(e) => setEn(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                placeholder="English"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Uzbek *
-              </label>
-              <input
-                type="text"
-                value={uz}
-                onChange={(e) => setUz(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                placeholder="Uzbek"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="flex space-x-4">
-            <div
-              onClick={() => setState("")}
-              className="flex-1 px-4 py-2 border text-center cursor-pointer border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              Cancel
+              <h2 className="text-xl font-bold text-gray-900">
+                Dictionary - {lesson?.title}
+              </h2>
+              <p className="text-sm text-gray-600 mt-1">
+                Manage English-Uzbek dictionary for this lesson
+              </p>
             </div>
             <button
-              type="submit"
-              disabled={isLoading}
-              className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600"
             >
-              {"Create"}
+              <svg
+                className="w-6 h-6"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
             </button>
           </div>
-        </form>
+        </div>
+
+        <div className="p-6">
+          {/* Add/Edit Form */}
+          <div className="bg-gray-50 rounded-lg p-4 mb-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              {editingDictionary ? "Edit Dictionary" : "Add New Dictionary"}
+            </h3>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    English *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.en}
+                    onChange={(e) =>
+                      setFormData({ ...formData, en: e.target.value })
+                    }
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    placeholder="English word"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Uzbek *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.uz}
+                    onChange={(e) =>
+                      setFormData({ ...formData, uz: e.target.value })
+                    }
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    placeholder="O'zbek so'z"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="flex space-x-4">
+                {editingDictionary && (
+                  <button
+                    type="button"
+                    onClick={resetForm}
+                    className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {isLoading
+                    ? "Saving..."
+                    : editingDictionary
+                    ? "Update"
+                    : "Add"}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Dictionary List */}
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              Dictionary Entries ({dictionaries.length})
+            </h3>
+
+            {dictionaries.length > 0 ? (
+              <div className="space-y-2">
+                {dictionaries.map((dictionary, index) => (
+                  <div
+                    key={dictionary._id || index}
+                    className="flex items-center justify-between bg-white border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow"
+                  >
+                    <div className="flex-1 grid grid-cols-2 gap-4">
+                      <div>
+                        <span className="text-sm text-gray-500">English:</span>
+                        <p className="font-medium text-gray-900">
+                          {dictionary.en}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-sm text-gray-500">Uzbek:</span>
+                        <p className="font-medium text-gray-900">
+                          {dictionary.uz}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => handleEdit(dictionary)}
+                        className="text-blue-600 hover:text-blue-700 p-1"
+                        title="Edit"
+                      >
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                          />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => handleDelete(dictionary._id)}
+                        className="text-red-600 hover:text-red-700 p-1"
+                        title="Delete"
+                      >
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <div className="text-gray-400 text-4xl mb-2">📚</div>
+                <p className="text-gray-500">No dictionary entries yet</p>
+                <p className="text-sm text-gray-400">
+                  Add English-Uzbek word pairs above
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
 };
 
-const LessonCard = ({ lesson, onEdit, onDelete, onDeleteAudio }) => {
+const LessonCard = ({
+  lesson,
+  onEdit,
+  onDelete,
+  onDeleteAudio,
+  onDictionaryClick,
+}) => {
   const [showAudioFiles, setShowAudioFiles] = useState(false);
-  const [dictionaryModal, setDictionaryModal] = useState("");
-
-  useEffect(() => {
-    console.log(dictionaryModal);
-  }, [dictionaryModal]);
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
       <div className="flex items-start justify-between mb-4">
-        {dictionaryModal ? (
-          <DictionaryModal setState={setDictionaryModal} lesson={lesson} />
-        ) : (
-          ""
-        )}
         <div className="flex items-center space-x-4">
           <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
             <span className="text-blue-600 text-xl font-bold">
@@ -343,10 +544,11 @@ const LessonCard = ({ lesson, onEdit, onDelete, onDeleteAudio }) => {
         </div>
         <div className="flex space-x-2">
           <button
-            className="text-gray-600 px-2 rounded-md border"
-            onClick={() => setDictionaryModal(true)}
+            className="text-purple-600 flex items-center justify-center gap-1  hover:text-purple-700 px-3 py-1 rounded-md border border-purple-200 hover:bg-purple-50 text-sm font-medium transition-colors"
+            onClick={() => onDictionaryClick(lesson)}
+            title="Manage Dictionary"
           >
-            Aa
+            <FiBook /> Dictionary ({lesson.dictionaries?.length || 0})
           </button>
           <button
             onClick={() => onEdit(lesson)}
@@ -412,7 +614,9 @@ const LessonCard = ({ lesson, onEdit, onDelete, onDeleteAudio }) => {
                   className="flex items-center justify-between bg-gray-50 p-3 rounded-lg"
                 >
                   <div className="flex items-center space-x-3">
-                    <span className="text-blue-600">🎵</span>
+                    <span className="text-blue-600">
+                      <FiMusic size={20} />
+                    </span>
                     <div>
                       <p className="text-sm font-medium text-gray-900">
                         {file.originalName}
@@ -605,7 +809,9 @@ const LessonModal = ({
                     className="flex items-center justify-between bg-gray-50 p-3 rounded-lg"
                   >
                     <div className="flex items-center space-x-3">
-                      <span className="text-blue-600">🎵</span>
+                      <span className="text-blue-600">
+                        <FiMusic />
+                      </span>
                       <div>
                         <p className="text-sm font-medium text-gray-900">
                           {file.name}

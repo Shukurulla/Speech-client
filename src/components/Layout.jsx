@@ -1,6 +1,15 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-
+import {
+  FiActivity,
+  FiBook,
+  FiLogOut,
+  FiSettings,
+  FiSpeaker,
+  FiVolume,
+  FiVolume1,
+  FiVolume2,
+} from "react-icons/fi";
 const ResponsiveLayout = ({ activePage, activeTab }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const navigate = useNavigate();
@@ -8,12 +17,17 @@ const ResponsiveLayout = ({ activePage, activeTab }) => {
   const menuItems = [
     {
       label: "Dashboard",
-      icon: "📊",
+      icon: <FiActivity />,
       path: "/",
     },
     {
+      label: "Grades",
+      icon: <FiBook />,
+      path: "/grades",
+    },
+    {
       label: "Settings",
-      icon: "⚙️",
+      icon: <FiSettings />,
       path: "/settings",
     },
   ];
@@ -67,7 +81,9 @@ const ResponsiveLayout = ({ activePage, activeTab }) => {
         <div className="flex items-center justify-between py-6 px-6 border-b border-gray-200">
           <div className="flex items-center space-x-2">
             <div className="w-8 h-8 bg-yellow-400 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">🔊</span>
+              <span className="text-white font-bold text-sm">
+                <FiVolume2 />
+              </span>
             </div>
             <span className="text-xl font-semibold text-gray-900">
               SpeakingCube
@@ -124,7 +140,9 @@ const ResponsiveLayout = ({ activePage, activeTab }) => {
             onClick={handleLogout}
             className="w-full flex items-center px-4 py-3 text-left rounded-lg text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all duration-200"
           >
-            <span className="text-xl mr-3">🚪</span>
+            <span className="text-xl mr-3">
+              <FiLogOut />
+            </span>
             <span className="font-medium">Log out</span>
           </button>
         </div>

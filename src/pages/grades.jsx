@@ -3,8 +3,9 @@ import { useNavigate } from "react-router-dom";
 import GradeService from "../service/grade.service";
 import { HeroImage } from "../assets";
 import { FiBook, FiBookOpen } from "react-icons/fi";
+import ResponsiveLayout from "../components/Layout";
 
-const Dashboard = () => {
+const Grade = () => {
   const navigate = useNavigate();
   const [grades, setGrades] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -32,62 +33,49 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto">
-      {/* Hero Section */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-8 mb-8">
-        <div className="row items-center justify-between">
-          <div className="col-lg-6 col-md-6 col-sm-12">
-            <h1 className="text-4xl font-[500] text-[#083156] mb-4 leading-tight">
-              Start your speaking journey today!
-            </h1>
+    <ResponsiveLayout
+      activePage={
+        <div className="max-w-7xl mx-auto">
+          {/* Grades Section */}
+          <div className="mb-8">
+            <h2 className="text-4xl font-[500] text-[#083156] mb-4 leading-tight">
+              Choose Your Grade Level
+            </h2>
             <p className="text-lg text-[#3D4D5C] mb-6 leading-relaxed">
-              Choose your grade level and improve your speaking skills with our
-              interactive lessons and tests.
+              Select your grade to access lessons, practice exercises, and
+              speaking tests.
             </p>
-          </div>
-          <div className="col-lg-6 col-md-6 col-sm-12 py-3 flex items-center justify-center">
-            <img src={HeroImage} className="w-[70%]" alt="Speaking practice" />
+
+            {isLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-400"></div>
+              </div>
+            ) : grades.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {grades.map((grade) => (
+                  <GradeCard
+                    key={grade._id}
+                    grade={grade}
+                    onSelect={() => handleGradeSelect(grade)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <div className="text-gray-400 text-6xl mb-4">📚</div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  No grades available
+                </h3>
+                <p className="text-gray-600">
+                  Please contact your administrator to set up grade levels.
+                </p>
+              </div>
+            )}
           </div>
         </div>
-      </div>
-
-      {/* Grades Section */}
-      <div className="mb-8">
-        <h2 className="text-4xl font-[500] text-[#083156] mb-4 leading-tight">
-          Choose Your Grade Level
-        </h2>
-        <p className="text-lg text-[#3D4D5C] mb-6 leading-relaxed">
-          Select your grade to access lessons, practice exercises, and speaking
-          tests.
-        </p>
-
-        {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-400"></div>
-          </div>
-        ) : grades.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {grades.map((grade) => (
-              <GradeCard
-                key={grade._id}
-                grade={grade}
-                onSelect={() => handleGradeSelect(grade)}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-12">
-            <div className="text-gray-400 text-6xl mb-4">📚</div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              No grades available
-            </h3>
-            <p className="text-gray-600">
-              Please contact your administrator to set up grade levels.
-            </p>
-          </div>
-        )}
-      </div>
-    </div>
+      }
+      activeTab={"Grades"}
+    />
   );
 };
 
@@ -146,4 +134,4 @@ const GradeCard = ({ grade, onSelect }) => {
   );
 };
 
-export default Dashboard;
+export default Grade;

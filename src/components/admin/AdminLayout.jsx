@@ -1,6 +1,16 @@
 import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useSelector } from "react-redux";
+import {
+  FiActivity,
+  FiUsers,
+  FiBookOpen,
+  FiBook,
+  FiDatabase,
+  FiUser,
+  FiPaperclip,
+  FiLogOut,
+} from "react-icons/fi";
 
 const AdminLayout = ({ children }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -11,32 +21,32 @@ const AdminLayout = ({ children }) => {
   const menuItems = [
     {
       label: "Dashboard",
-      icon: "📊",
+      icon: <FiActivity />,
       path: "/admin",
     },
     {
       label: "Students",
-      icon: "👥",
+      icon: <FiUsers />,
       path: "/admin/students",
     },
     {
       label: "Grades",
-      icon: "📚",
+      icon: <FiBook />,
       path: "/admin/grades",
     },
     {
       label: "Lessons",
-      icon: "📖",
+      icon: <FiBookOpen />,
       path: "/admin/lessons",
     },
     {
       label: "Tests",
-      icon: "📝",
+      icon: <FiPaperclip />,
       path: "/admin/tests",
     },
     {
       label: "Results",
-      icon: "📈",
+      icon: <FiDatabase />,
       path: "/admin/results",
     },
   ];
@@ -93,7 +103,9 @@ const AdminLayout = ({ children }) => {
         <div className="flex items-center justify-between py-6 px-6 border-b border-gray-200">
           <div className="flex items-center space-x-2">
             <div className="w-8 h-8 bg-red-500 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">👨‍💼</span>
+              <span className="text-white font-bold text-sm">
+                <FiUser />
+              </span>
             </div>
             <span className="text-xl font-semibold text-gray-900">
               Admin Panel
@@ -166,7 +178,9 @@ const AdminLayout = ({ children }) => {
             onClick={handleLogout}
             className="w-full flex items-center px-4 py-3 text-left rounded-lg text-red-600 hover:bg-red-50 transition-all duration-200"
           >
-            <span className="text-xl mr-3">🚪</span>
+            <span className="text-xl mr-3">
+              <FiLogOut />
+            </span>
             <span className="font-medium">Logout</span>
           </button>
         </div>

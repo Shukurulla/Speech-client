@@ -4,6 +4,7 @@ import TestService from "../service/test.service";
 import TestResultService from "../service/testresult.service";
 import SpeechTest from "../components/SpeechTest";
 import ResponsiveLayout from "../components/Layout";
+import { FiActivity, FiFolder, FiPaperclip } from "react-icons/fi";
 
 const TestQuestions = () => {
   const { testId } = useParams();
@@ -207,11 +208,17 @@ const TestQuestions = () => {
           <p className="text-lg text-gray-600">
             {grade?.name} - {lesson?.title}
           </p>
-          <div className="mt-2 flex items-center space-x-4 text-sm text-gray-500">
-            <span>📝 {testDetails.length} Questions</span>
-            <span>📂 {test?.category?.title}</span>
+          <div className="mt-2 flex items-center gap-2 space-x-4 text-sm text-gray-500">
+            <span className="flex gap-1">
+              <FiPaperclip /> {testDetails.length} Questions
+            </span>
+            <span className="flex gap-1">
+              <FiFolder /> {test?.category?.title}
+            </span>
             {test?.difficulty && (
-              <span className="capitalize">🔥 {test.difficulty}</span>
+              <span className="capitalize flex gap-1">
+                <FiActivity /> {test.difficulty}
+              </span>
             )}
           </div>
         </div>

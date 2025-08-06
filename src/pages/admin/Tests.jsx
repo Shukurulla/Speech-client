@@ -2,6 +2,13 @@ import React, { useState, useEffect } from "react";
 import AdminLayout from "../../components/admin/AdminLayout";
 import axios from "../../service/api";
 import { toast } from "react-hot-toast";
+import {
+  FiBookOpen,
+  FiCamera,
+  FiMessageSquare,
+  FiMic,
+  FiPaperclip,
+} from "react-icons/fi";
 
 const AdminTests = () => {
   const [tests, setTests] = useState([]);
@@ -330,17 +337,16 @@ const TestCard = ({ test, onEdit, onDelete, onManageDetails }) => {
   const getCategoryIcon = (categoryTitle) => {
     switch (categoryTitle) {
       case "Read Aloud":
-        return "🎤";
+        return <FiMic color="#222" />;
       case "Read, then Speak":
-        return "📖";
+        return <FiBookOpen />;
       case "Speaking Sample":
-        return "💬";
+        return <FiMessageSquare />;
       case "Speak about the Photo":
-        return "📷";
-      case "Listen, then Speak":
-        return "👂";
+        return <FiCamera />;
+
       default:
-        return "📝";
+        return <FiPaperclip />;
     }
   };
 

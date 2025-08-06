@@ -19,6 +19,7 @@ import AdminGrades from "./pages/admin/Grades";
 import AdminLessons from "./pages/admin/Lessons";
 import AdminTests from "./pages/admin/Tests";
 import AdminResults from "./pages/admin/Results";
+import Grades from "./pages/Grades.jsx";
 
 function App() {
   const navigate = useNavigate();
@@ -125,6 +126,7 @@ function App() {
 
         {/* Test Questions - Shows questions for selected test */}
         <Route path="/test/:testId" element={<TestQuestions />} />
+        <Route path="/grades/" element={<Grades />} />
 
         {/* Settings */}
         <Route

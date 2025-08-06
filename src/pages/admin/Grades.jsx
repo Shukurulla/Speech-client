@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import AdminLayout from "../../components/admin/AdminLayout";
 import axios from "../../service/api";
 import { toast } from "react-hot-toast";
+import { FiBook } from "react-icons/fi";
 
 const AdminGrades = () => {
   const [grades, setGrades] = useState([]);
@@ -215,7 +216,9 @@ const GradeCard = ({ grade, onEdit, onDelete }) => {
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
       <div className="flex items-center justify-between mb-4">
         <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
-          <span className="text-red-600 text-xl font-bold">📚</span>
+          <span className="text-red-600 text-xl font-bold">
+            <FiBook />
+          </span>
         </div>
         <div className="flex space-x-2">
           <button

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { FiActivity, FiAward, FiVolume2 } from "react-icons/fi";
 
 const SpeechTest = ({
   testDetail,
@@ -492,7 +493,9 @@ const SpeechTest = ({
                   onClick={playExampleAudio}
                   className="flex items-center space-x-2 px-6 py-3 bg-white border-2 border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
                 >
-                  <span>🔊</span>
+                  <span>
+                    <FiVolume2 />
+                  </span>
                   <span>Listen to Sample</span>
                 </button>
               </div>
@@ -590,7 +593,9 @@ const SpeechTest = ({
               {score !== null && (
                 <div className="text-center mb-6">
                   <div className="inline-flex items-center space-x-3 bg-white rounded-xl p-4 border">
-                    <span className="text-2xl">🏆</span>
+                    <span className="text-3xl text-yellow-500">
+                      <FiAward />
+                    </span>
                     <div>
                       <div className="text-2xl font-bold text-green-600">
                         {score}/100
@@ -608,7 +613,9 @@ const SpeechTest = ({
                   onClick={playExampleAudio}
                   className="flex items-center space-x-2 px-6 py-3 bg-white border-2 border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
                 >
-                  <span>🔊</span>
+                  <span>
+                    <FiVolume2 />
+                  </span>
                   <span>Sample</span>
                 </button>
 
@@ -617,7 +624,9 @@ const SpeechTest = ({
                   disabled={!audioBlob}
                   className="flex items-center space-x-2 px-6 py-3 bg-white border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
                 >
-                  <span>📊</span>
+                  <span>
+                    <FiActivity />
+                  </span>
                   <span>Your recording</span>
                 </button>
 

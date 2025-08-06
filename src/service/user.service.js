@@ -36,6 +36,7 @@ const UserService = {
         toast.success(data.message);
         dispatch(getUserSuccess(data));
         localStorage.setItem("speech-token", data.token);
+        
         navigate("/");
       } else {
         toast.error(data.message);
