@@ -21,6 +21,7 @@ const SpeechTest = ({
   const [microphonePermission, setMicrophonePermission] = useState(null);
   const [showQuitModal, setShowQuitModal] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   const recognitionRef = useRef(null);
   const mediaRecorderRef = useRef(null);
@@ -28,10 +29,9 @@ const SpeechTest = ({
   const timerRef = useRef(null);
   const finalTranscriptRef = useRef("");
 
-  // Check microphone permission on component mount
+  // Check microphone permission and initialize on component mount
   useEffect(() => {
-    checkMicrophonePermission();
-    initializeSpeechRecognition();
+    initializeComponent();
 
     return () => {
       // Cleanup
@@ -47,6 +47,42 @@ const SpeechTest = ({
       }
     };
   }, []);
+
+  // Reset state when question changes
+  useEffect(() => {
+    resetQuestionState();
+  }, [testDetail._id]);
+
+  const initializeComponent = async () => {
+    setIsLoading(true);
+    await checkMicrophonePermission();
+    await initializeSpeechRecognition();
+    setIsLoading(false);
+  };
+
+  const resetQuestionState = () => {
+    setIsRecording(false);
+    setRecordedText("");
+    setIsListening(false);
+    setScore(null);
+    setTimeLeft(30);
+    setTestPhase("ready");
+    setAudioBlob(null);
+    setShowResults(false);
+    setIsProcessing(false);
+    finalTranscriptRef.current = "";
+
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {
+        console.log("Recognition stop error:", e);
+      }
+    }
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+    }
+  };
 
   // Timer countdown
   useEffect(() => {
@@ -72,7 +108,7 @@ const SpeechTest = ({
     }
   };
 
-  const initializeSpeechRecognition = () => {
+  const initializeSpeechRecognition = async () => {
     if (
       !("webkitSpeechRecognition" in window) &&
       !("SpeechRecognition" in window)
@@ -144,11 +180,11 @@ const SpeechTest = ({
     try {
       await navigator.mediaDevices.getUserMedia({ audio: true });
       setMicrophonePermission("granted");
-      window.location.reload();
+      await initializeSpeechRecognition();
     } catch (error) {
       setMicrophonePermission("denied");
       alert(
-        "Mikrofonga ruxsat berilmadi. Iltimos, brauzer sozlamalaridan mikrofonga ruxsat bering."
+        "Microphone access denied. Please enable microphone access in your browser settings."
       );
     }
   };
@@ -222,7 +258,7 @@ const SpeechTest = ({
     } catch (error) {
       console.error("Error starting recording:", error);
       alert(
-        "Mikrofon ishlatishda xatolik yuz berdi. Iltimos, qaytadan urinib ko'ring."
+        "Failed to start recording. Please check your microphone and try again."
       );
       setTestPhase("ready");
       setIsRecording(false);
@@ -367,15 +403,12 @@ const SpeechTest = ({
     return matrix[str2.length][str1.length];
   };
 
-  const resetTest = () => {
-    setTestPhase("ready");
-    setRecordedText("");
-    finalTranscriptRef.current = "";
-    setScore(null);
-    setTimeLeft(30);
-    setAudioBlob(null);
-    setShowResults(false);
-    setIsProcessing(false);
+  const handleNext = () => {
+    if (hasNext) {
+      onNext();
+    } else {
+      onBack(); // Go back to test selection if this was the last question
+    }
   };
 
   const handleQuit = () => {
@@ -385,6 +418,25 @@ const SpeechTest = ({
   const confirmQuit = () => {
     onBack();
   };
+
+  // Loading screen
+  if (isLoading) {
+    return (
+      <div className="max-w-4xl mx-auto bg-white rounded-2xl shadow-lg overflow-hidden">
+        <div className="p-8">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              Initializing Speech Test
+            </h3>
+            <p className="text-gray-600">
+              Setting up microphone and speech recognition...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Show error if microphone denied
   if (microphonePermission === "denied") {

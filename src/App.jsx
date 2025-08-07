@@ -11,6 +11,7 @@ import LessonTests from "./pages/LessonTests";
 import TestQuestions from "./pages/TestQuestions.jsx";
 import UserService from "./service/user.service";
 import { useDispatch, useSelector } from "react-redux";
+import AdminListeningTestCreator from "./pages/admin/ListeningTestCreator";
 
 // Admin Components
 import AdminDashboard from "./pages/admin/Dashboard";
@@ -20,6 +21,7 @@ import AdminLessons from "./pages/admin/Lessons";
 import AdminTests from "./pages/admin/Tests";
 import AdminResults from "./pages/admin/Results";
 import Grades from "./pages/Grades.jsx";
+import StudentResults from "./pages/StudentResult.jsx";
 
 function App() {
   const navigate = useNavigate();
@@ -97,6 +99,10 @@ function App() {
           <Route path="/admin/lessons" element={<AdminLessons />} />
           <Route path="/admin/tests" element={<AdminTests />} />
           <Route path="/admin/results" element={<AdminResults />} />
+          <Route
+            path="/admin/tests/listening/create"
+            element={<AdminListeningTestCreator />}
+          />
         </Routes>
       </>
     );
@@ -127,7 +133,7 @@ function App() {
         {/* Test Questions - Shows questions for selected test */}
         <Route path="/test/:testId" element={<TestQuestions />} />
         <Route path="/grades/" element={<Grades />} />
-
+        <Route path="/results" element={<StudentResults />} />
         {/* Settings */}
         <Route
           path="/settings"

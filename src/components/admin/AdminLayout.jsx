@@ -95,7 +95,7 @@ const AdminLayout = ({ children }) => {
 
       {/* Sidebar */}
       <div
-        className={`fixed lg:static lg:translate-x-0 w-72 bg-white border-r border-gray-200 h-full z-40 transition-transform duration-300 ${
+        className={`fixed  lg:static lg:translate-x-0 w-72 bg-white border-r border-gray-200 h-[100vh] overflow-y-scroll z-40 transition-transform duration-300 ${
           isSidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -169,6 +169,9 @@ const AdminLayout = ({ children }) => {
                 <span className="font-medium">{item.label}</span>
               </button>
             ))}
+            <button onClick={() => navigate("/admin/tests/listening/create")}>
+              Create Listening Test
+            </button>
           </div>
         </nav>
 
@@ -188,7 +191,9 @@ const AdminLayout = ({ children }) => {
 
       {/* Main Content */}
       <div className="flex-1 lg:ml-0">
-        <div className="p-4 lg:p-8 min-h-screen pt-16 lg:pt-8">{children}</div>
+        <div className="p-4 lg:p-8 h-[100vh] overflow-hidden overflow-y-scroll pt-16 lg:pt-8 ">
+          {children}
+        </div>
       </div>
     </div>
   );
