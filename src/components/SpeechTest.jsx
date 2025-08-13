@@ -416,7 +416,27 @@ const SpeechTest = ({
   };
 
   const confirmQuit = () => {
+    // Clean up any ongoing processes
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {
+        console.log("Recognition cleanup on quit:", e);
+      }
+    }
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+    }
+    if (speechSynthesis.speaking) {
+      speechSynthesis.cancel();
+    }
+
+    // Call the onBack function to return to test selection
     onBack();
+  };
+
+  const resetTest = () => {
+    resetQuestionState();
   };
 
   // Loading screen
@@ -444,18 +464,26 @@ const SpeechTest = ({
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4">
           <h2 className="text-xl font-semibold text-gray-900 mb-4 text-center">
-            Mikrofonга ruxsat kerak
+            Mikrofonға ruxsat kerak
           </h2>
           <p className="text-gray-600 mb-6 text-center">
             Speech test uchun mikrofon kerak. Iltimos, brauzer sozlamalarida
             ruxsat bering.
           </p>
-          <button
-            onClick={requestMicrophonePermission}
-            className="w-full bg-yellow-400 hover:bg-yellow-500 text-white py-3 px-6 rounded-lg font-semibold transition-colors"
-          >
-            Ruxsat berish
-          </button>
+          <div className="flex space-x-4">
+            <button
+              onClick={requestMicrophonePermission}
+              className="flex-1 bg-yellow-400 hover:bg-yellow-500 text-white py-3 px-6 rounded-lg font-semibold transition-colors"
+            >
+              Ruxsat berish
+            </button>
+            <button
+              onClick={confirmQuit}
+              className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-3 px-6 rounded-lg font-semibold transition-colors"
+            >
+              Bekor qilish
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -468,8 +496,12 @@ const SpeechTest = ({
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4">
             <h2 className="text-xl font-semibold text-gray-900 mb-6 text-center">
-              Are you sure you want to quit this session?
+              Are you sure you want to quit this test?
             </h2>
+            <p className="text-gray-600 mb-6 text-center">
+              Your progress will be lost and you'll return to the test
+              selection.
+            </p>
             <div className="flex space-x-4">
               <button
                 onClick={() => setShowQuitModal(false)}
@@ -481,7 +513,7 @@ const SpeechTest = ({
                 onClick={confirmQuit}
                 className="flex-1 bg-yellow-400 hover:bg-yellow-500 text-white py-3 px-6 rounded-lg font-semibold transition-colors"
               >
-                Quit
+                Yes, Quit
               </button>
             </div>
           </div>
@@ -690,7 +722,7 @@ const SpeechTest = ({
                 </button>
 
                 <button
-                  onClick={hasNext ? onNext : onBack}
+                  onClick={handleNext}
                   className="px-8 py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors"
                 >
                   {hasNext ? "Next Question" : "Complete Test"}

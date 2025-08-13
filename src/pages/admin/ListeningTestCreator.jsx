@@ -289,7 +289,7 @@ const AdminListeningTestCreator = () => {
           <div className="flex items-center space-x-4">
             <button
               onClick={() => window.history.back()}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-2 hover:bg-indigo-500 bg-indigo-600 rounded-lg transition-colors"
             >
               <FiArrowLeft className="text-xl" />
             </button>

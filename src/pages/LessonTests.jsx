@@ -16,6 +16,8 @@ import {
   FiCheck,
   FiAward,
   FiTrendingUp,
+  FiClock,
+  FiStar,
 } from "react-icons/fi";
 
 const LessonTests = () => {
@@ -27,6 +29,10 @@ const LessonTests = () => {
   const [speechTests, setSpeechTests] = useState([]);
   const [listeningTests, setListeningTests] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Test history states
+  const [testHistory, setTestHistory] = useState([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 
   // Test execution states
   const [activeTestType, setActiveTestType] = useState(null); // 'speech' or 'listening'
@@ -52,6 +58,7 @@ const LessonTests = () => {
   useEffect(() => {
     if (lessonId) {
       fetchTests();
+      fetchTestHistory();
     }
   }, [lessonId]);
 
@@ -81,6 +88,24 @@ const LessonTests = () => {
     }
   };
 
+  const fetchTestHistory = async () => {
+    try {
+      setIsLoadingHistory(true);
+      const response = await TestResultService.getMyResults({
+        lessonId: lessonId,
+        limit: 100, // Get all results for this lesson
+      });
+
+      if (response.status === "success") {
+        setTestHistory(response.data.results);
+      }
+    } catch (error) {
+      console.error("Error fetching test history:", error);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
   const fetchTestDetails = async (tests) => {
     try {
       let allDetails = [];
@@ -104,6 +129,56 @@ const LessonTests = () => {
       console.error("Error fetching test details:", error);
       return [];
     }
+  };
+
+  // Get test statistics for a specific test type
+  const getTestTypeStats = (testType) => {
+    const tests = testType === "speech" ? speechTests : listeningTests;
+    const testIds = tests.map((t) => t._id);
+
+    // Filter history for this test type
+    const typeHistory = testHistory.filter((result) =>
+      testIds.includes(result.testId)
+    );
+
+    if (typeHistory.length === 0) {
+      return {
+        hasHistory: false,
+        lastScore: 0,
+        bestScore: 0,
+        totalAttempts: 0,
+        lastAttemptDate: null,
+        averageScore: 0,
+        improvement: 0,
+      };
+    }
+
+    // Sort by date to get latest
+    const sortedHistory = typeHistory.sort(
+      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+    );
+    const lastResult = sortedHistory[0];
+    const bestScore = Math.max(...typeHistory.map((r) => r.score));
+    const averageScore = Math.round(
+      typeHistory.reduce((sum, r) => sum + r.score, 0) / typeHistory.length
+    );
+
+    // Calculate improvement (compare first vs recent attempts)
+    const improvement =
+      typeHistory.length > 1
+        ? lastResult.score - typeHistory[typeHistory.length - 1].score
+        : 0;
+
+    return {
+      hasHistory: true,
+      lastScore: lastResult.score,
+      bestScore,
+      totalAttempts: typeHistory.length,
+      lastAttemptDate: lastResult.createdAt,
+      averageScore,
+      improvement,
+      timeSpent: typeHistory.reduce((sum, r) => sum + (r.timeTaken || 0), 0),
+    };
   };
 
   const startTestType = async (testType) => {
@@ -141,7 +216,6 @@ const LessonTests = () => {
       const filtered = prev.filter((r) => r.questionId !== questionId);
       return [...filtered, result];
     });
-    console.log(result);
   };
 
   const handleNextQuestion = () => {
@@ -153,10 +227,16 @@ const LessonTests = () => {
     }
   };
 
-  const handleBackToQuestion = () => {
-    if (currentDetailIndex > 0) {
-      setCurrentDetailIndex(currentDetailIndex - 1);
-    }
+  const handleBackToTests = () => {
+    navigate(`/grade/${grade?._id}`, { state: { grade } });
+  };
+
+  const handleQuitTest = () => {
+    setActiveTestType(null);
+    setCurrentTestDetails([]);
+    setCurrentDetailIndex(0);
+    setTestResults([]);
+    setTestStartTime(null);
   };
 
   const completeTestType = async () => {
@@ -231,6 +311,9 @@ const LessonTests = () => {
       setCurrentDetailIndex(0);
       setTestResults([]);
 
+      // Refresh test history to show new results
+      await fetchTestHistory();
+
       toast.success(
         `${
           activeTestType === "speech" ? "Speech" : "Listening"
@@ -258,10 +341,6 @@ const LessonTests = () => {
     }
   };
 
-  const handleBackToTests = () => {
-    navigate(`/grade/${grade?._id}`, { state: { grade } });
-  };
-
   const resetTestType = (testType) => {
     setCompletedTests((prev) => ({
       ...prev,
@@ -282,7 +361,7 @@ const LessonTests = () => {
       <TestComponent
         testDetail={currentTestDetails[currentDetailIndex]}
         onNext={handleNextQuestion}
-        onBack={handleBackToQuestion}
+        onBack={handleQuitTest}
         hasNext={currentDetailIndex < currentTestDetails.length - 1}
         onComplete={handleQuestionComplete}
         questionNumber={currentDetailIndex + 1}
@@ -300,13 +379,16 @@ const LessonTests = () => {
   );
 
   function LessonTestsContent() {
-    if (isLoading) {
+    if (isLoading || isLoadingHistory) {
       return (
         <div className="flex items-center justify-center py-12">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
         </div>
       );
     }
+
+    const speechStats = getTestTypeStats("speech");
+    const listeningStats = getTestTypeStats("listening");
 
     return (
       <div className="max-w-7xl mx-auto">
@@ -346,6 +428,9 @@ const LessonTests = () => {
             <span className="flex items-center gap-2">
               <FiHeadphones /> {listeningTests.length} Listening Tests
             </span>
+            <span className="flex items-center gap-2">
+              <FiAward /> {testHistory.length} Total Attempts
+            </span>
           </div>
         </div>
 
@@ -361,6 +446,7 @@ const LessonTests = () => {
             testCount={speechTests.length}
             isCompleted={completedTests.speech}
             result={finalResults.speech}
+            stats={speechStats}
             onStart={() => startTestType("speech")}
             onReset={() => resetTestType("speech")}
             disabled={speechTests.length === 0}
@@ -376,6 +462,7 @@ const LessonTests = () => {
             testCount={listeningTests.length}
             isCompleted={completedTests.listening}
             result={finalResults.listening}
+            stats={listeningStats}
             onStart={() => startTestType("listening")}
             onReset={() => resetTestType("listening")}
             disabled={listeningTests.length === 0}
@@ -467,7 +554,7 @@ const LessonTests = () => {
   }
 };
 
-// Test Type Card Component
+// Enhanced Test Type Card Component with Statistics
 const TestTypeCard = ({
   type,
   title,
@@ -477,17 +564,43 @@ const TestTypeCard = ({
   testCount,
   isCompleted,
   result,
+  stats,
   onStart,
   onReset,
   disabled,
 }) => {
+  const getScoreColor = (score) => {
+    if (score >= 90) return "text-green-600";
+    if (score >= 75) return "text-blue-600";
+    if (score >= 60) return "text-yellow-600";
+    return "text-red-600";
+  };
+
+  const getImprovementDisplay = (improvement) => {
+    if (improvement > 0) {
+      return (
+        <div className="flex items-center text-green-600 text-sm">
+          <FiTrendingUp className="mr-1" size={12} />+{improvement}% improved
+        </div>
+      );
+    } else if (improvement < 0) {
+      return (
+        <div className="flex items-center text-red-500 text-sm">
+          <span className="mr-1">↓</span>
+          {Math.abs(improvement)}% decreased
+        </div>
+      );
+    }
+    return null;
+  };
+
   return (
     <div
       className={`bg-white rounded-xl shadow-sm border-2 p-8 transition-all duration-300 ${
         disabled
           ? "border-gray-200 opacity-60"
-          : isCompleted
-          ? "border-green-200 bg-green-50"
+          : stats.hasHistory || isCompleted
+          ? "border-green-200 bg-gradient-to-br from-white to-green-50"
           : "border-gray-200 hover:border-blue-300 hover:shadow-lg"
       }`}
     >
@@ -497,9 +610,14 @@ const TestTypeCard = ({
           <div
             className={`w-20 h-20 ${
               disabled ? "bg-gray-400" : color
-            } rounded-full flex items-center justify-center text-white transition-colors`}
+            } rounded-full flex items-center justify-center text-white transition-colors relative`}
           >
             {icon}
+            {stats.hasHistory && (
+              <div className="absolute -top-1 -right-1 w-6 h-6 bg-yellow-400 rounded-full flex items-center justify-center">
+                <FiStar className="text-white text-xs" />
+              </div>
+            )}
           </div>
           {isCompleted && (
             <div className="absolute -top-2 -right-2 w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
@@ -520,26 +638,67 @@ const TestTypeCard = ({
             <span>
               {testCount} {testCount === 1 ? "test" : "tests"}
             </span>
-            {result && (
+            {stats.hasHistory && (
               <>
                 <span>•</span>
-                <span>
-                  Completed in {Math.round(result.timeTaken / 60)}m{" "}
-                  {result.timeTaken % 60}s
-                </span>
+                <span>{stats.totalAttempts} attempts</span>
               </>
             )}
           </div>
 
-          {/* Results Display */}
+          {/* Statistics Display */}
+          {stats.hasHistory && (
+            <div className="bg-white rounded-lg p-4 border border-gray-200 mb-4">
+              <div className="grid grid-cols-2 gap-4 text-center">
+                <div>
+                  <div
+                    className={`text-xl font-bold ${getScoreColor(
+                      stats.lastScore
+                    )}`}
+                  >
+                    {stats.lastScore}%
+                  </div>
+                  <div className="text-xs text-gray-500">Last Score</div>
+                </div>
+                <div>
+                  <div className="text-xl font-bold text-green-600">
+                    {stats.bestScore}%
+                  </div>
+                  <div className="text-xs text-gray-500">Best Score</div>
+                </div>
+              </div>
+
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600">
+                    Average: {stats.averageScore}%
+                  </span>
+                  {getImprovementDisplay(stats.improvement)}
+                </div>
+
+                {stats.lastAttemptDate && (
+                  <div className="flex items-center justify-center mt-2 text-xs text-gray-500">
+                    <FiClock className="mr-1" size={12} />
+                    Last attempt:{" "}
+                    {new Date(stats.lastAttemptDate).toLocaleDateString()}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Current Session Results Display */}
           {isCompleted && result && (
-            <div className="bg-white rounded-lg p-4 border border-green-200 mb-4">
+            <div className="bg-green-100 rounded-lg p-4 border border-green-200 mb-4">
+              <div className="text-sm text-green-800 mb-2 font-medium">
+                Recent Session:
+              </div>
               <div className="flex items-center justify-between">
                 <div className="text-center flex-1">
-                  <div className="text-2xl font-bold text-green-600">
+                  <div className="text-xl font-bold text-green-600">
                     {result.score}%
                   </div>
-                  <div className="text-xs text-gray-500">Final Score</div>
+                  <div className="text-xs text-gray-500">Score</div>
                 </div>
                 <div className="text-center flex-1">
                   <div className="text-lg font-semibold text-gray-900">
@@ -570,19 +729,23 @@ const TestTypeCard = ({
                   : `${color} hover:opacity-90 text-white`
               }`}
             >
-              {disabled ? "No Tests Available" : `Start ${title}`}
+              {disabled
+                ? "No Tests Available"
+                : stats.hasHistory
+                ? `Retake ${title}`
+                : `Start ${title}`}
             </button>
           ) : (
             <div className="space-y-2">
               <div className="flex items-center justify-center text-green-600 font-medium mb-2">
                 <FiCheck className="mr-2" />
-                Test Completed!
+                Session Completed!
               </div>
               <button
                 onClick={onReset}
                 className="w-full py-2 px-4 border-2 border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
               >
-                Retake Test
+                Start New Session
               </button>
             </div>
           )}

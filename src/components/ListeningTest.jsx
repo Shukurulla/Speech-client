@@ -23,9 +23,9 @@ const ListeningTest = ({
 
   useEffect(() => {
     // Initialize speech synthesis
-    if ('speechSynthesis' in window) {
+    if ("speechSynthesis" in window) {
       utteranceRef.current = new SpeechSynthesisUtterance();
-      utteranceRef.current.lang = 'en-US';
+      utteranceRef.current.lang = "en-US";
       utteranceRef.current.rate = 0.8;
       utteranceRef.current.pitch = 1;
       utteranceRef.current.volume = 1;
@@ -67,12 +67,12 @@ const ListeningTest = ({
     }
 
     utteranceRef.current.text = testDetail.text;
-    
+
     utteranceRef.current.onstart = () => {
       setIsPlaying(true);
       setTestPhase("listening");
     };
-    
+
     utteranceRef.current.onend = () => {
       setIsPlaying(false);
       setPlayCount(1); // Mark as played
@@ -100,7 +100,10 @@ const ListeningTest = ({
       return;
     }
 
-    const calculatedScore = calculateSimilarityScore(testDetail.text, userAnswer);
+    const calculatedScore = calculateSimilarityScore(
+      testDetail.text,
+      userAnswer
+    );
     setScore(calculatedScore);
     setTestPhase("completed");
     setIsCompleted(true);
@@ -202,6 +205,12 @@ const ListeningTest = ({
   };
 
   const confirmQuit = () => {
+    // Clean up any ongoing processes
+    if (speechSynthesis.speaking) {
+      speechSynthesis.cancel();
+    }
+
+    // Call the onBack function to return to test selection
     onBack();
   };
 
@@ -212,8 +221,12 @@ const ListeningTest = ({
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4">
             <h2 className="text-xl font-semibold text-gray-900 mb-6 text-center">
-              Are you sure you want to quit this session?
+              Are you sure you want to quit this test?
             </h2>
+            <p className="text-gray-600 mb-6 text-center">
+              Your progress will be lost and you'll return to the test
+              selection.
+            </p>
             <div className="flex space-x-4">
               <button
                 onClick={() => setShowQuitModal(false)}
@@ -225,7 +238,7 @@ const ListeningTest = ({
                 onClick={confirmQuit}
                 className="flex-1 bg-red-600 hover:bg-red-700 text-white py-3 px-6 rounded-lg font-semibold transition-colors"
               >
-                Quit
+                Yes, Quit
               </button>
             </div>
           </div>
@@ -290,7 +303,11 @@ const ListeningTest = ({
                 >
                   {isPlaying ? <FiPause size={24} /> : <FiPlay size={24} />}
                   <span className="text-lg">
-                    {isPlaying ? "Stop Audio" : playCount >= 1 ? "Audio Played" : "Play Audio"}
+                    {isPlaying
+                      ? "Stop Audio"
+                      : playCount >= 1
+                      ? "Audio Played"
+                      : "Play Audio"}
                   </span>
                 </button>
               </div>

@@ -9,12 +9,15 @@ import {
   FiTarget,
   FiActivity,
 } from "react-icons/fi";
+import { useNavigate } from "react-router-dom";
 
 const Dashboard = () => {
   const [grades, setGrades] = useState([]);
   const [gradeStats, setGradeStats] = useState({});
   const [userStats, setUserStats] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const navigate = useNavigate();
 
   // Mock user data
   const user = { firstname: "Student" };
@@ -70,8 +73,7 @@ const Dashboard = () => {
   };
 
   const handleGradeSelect = (grade) => {
-    // In real app: navigate(`/grade/${grade._id}`, { state: { grade } });
-    alert(`Selected ${grade.name}`);
+    navigate(`/grade/${grade._id}`);
   };
 
   const getGreeting = () => {

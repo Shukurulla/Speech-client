@@ -9,6 +9,7 @@ import {
   FiMic,
   FiPaperclip,
 } from "react-icons/fi";
+import { useNavigate } from "react-router-dom";
 
 const AdminTests = () => {
   const [tests, setTests] = useState([]);
@@ -28,6 +29,7 @@ const AdminTests = () => {
     categoryId: "",
     difficulty: "medium",
   });
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchInitialData();
@@ -188,13 +190,20 @@ const AdminTests = () => {
             </h1>
             <p className="text-gray-600">Manage speech tests for lessons</p>
           </div>
-          <button
-            onClick={openCreateModal}
-            disabled={!selectedLesson}
-            className="bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white px-6 py-2 rounded-lg font-medium transition-colors"
-          >
-            Add Test
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={openCreateModal}
+              className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+            >
+              Add Speaking Test
+            </button>
+            <button
+              onClick={() => navigate("/admin/tests/listening/create")}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+            >
+              Add Listening Test
+            </button>
+          </div>
         </div>
 
         {/* Filters */}
@@ -273,12 +282,20 @@ const AdminTests = () => {
                 <p className="text-gray-600 mb-4">
                   Create the first test for this lesson.
                 </p>
-                <button
-                  onClick={openCreateModal}
-                  className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
-                >
-                  Add Test
-                </button>
+                <div className="flex items-center justify-center gap-2">
+                  <button
+                    onClick={openCreateModal}
+                    className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+                  >
+                    Add Speaking Test
+                  </button>
+                  <button
+                    onClick={openCreateModal}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+                  >
+                    Add Listening Test
+                  </button>
+                </div>
               </div>
             )}
           </div>
