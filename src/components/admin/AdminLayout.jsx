@@ -1,200 +1,229 @@
+// src/components/admin/AdminLayout.jsx
 import React, { useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
-import { useSelector } from "react-redux";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
-  FiActivity,
+  FiHome,
   FiUsers,
-  FiBookOpen,
   FiBook,
-  FiDatabase,
-  FiUser,
-  FiPaperclip,
+  FiBookOpen,
+  FiFileText,
+  FiBarChart2,
+  FiMenu,
+  FiX,
   FiLogOut,
+  FiChevronDown,
+  FiMic,
+  FiClipboard,
 } from "react-icons/fi";
+import { useDispatch } from "react-redux";
 
 const AdminLayout = ({ children }) => {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useSelector((state) => state.user);
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [expandedMenus, setExpandedMenus] = useState({});
 
   const menuItems = [
     {
+      path: "/admin/dashboard",
       label: "Dashboard",
-      icon: <FiActivity />,
-      path: "/admin",
+      icon: FiHome,
     },
     {
-      label: "Students",
-      icon: <FiUsers />,
       path: "/admin/students",
+      label: "Students",
+      icon: FiUsers,
     },
     {
-      label: "Grades",
-      icon: <FiBook />,
       path: "/admin/grades",
+      label: "Grades & Lessons",
+      icon: FiBook,
     },
     {
-      label: "Lessons",
-      icon: <FiBookOpen />,
-      path: "/admin/lessons",
-    },
-    {
-      label: "Tests",
-      icon: <FiPaperclip />,
       path: "/admin/tests",
+      label: "Regular Tests",
+      icon: FiBookOpen,
+      subItems: [
+        {
+          path: "/admin/tests",
+          label: "Speaking Tests",
+        },
+        {
+          path: "/admin/tests/listening/create",
+          label: "Listening Tests",
+        },
+      ],
     },
     {
-      label: "Results",
-      icon: <FiDatabase />,
+      path: "/admin/topic-tests",
+      label: "Topic Tests",
+      icon: FiMic,
+      description: "Every 5 lessons",
+    },
+    {
+      path: "/admin/mock-tests",
+      label: "Mock Tests",
+      icon: FiClipboard,
+      description: "20 questions test",
+    },
+    {
       path: "/admin/results",
+      label: "Results",
+      icon: FiBarChart2,
     },
   ];
 
+  const logoutUser = () => {
+    localStorage.clear();
+  };
+
   const handleLogout = () => {
     localStorage.removeItem("speech-token");
+    dispatch(logoutUser());
     navigate("/login");
   };
 
+  const toggleSubmenu = (path) => {
+    setExpandedMenus((prev) => ({
+      ...prev,
+      [path]: !prev[path],
+    }));
+  };
+
   const isActive = (path) => {
-    if (path === "/admin") {
-      return location.pathname === "/admin";
+    if (path === "/admin/dashboard" && location.pathname === "/admin") {
+      return true;
     }
-    return location.pathname.startsWith(path);
+    return location.pathname === path;
+  };
+
+  const isParentActive = (item) => {
+    if (item.subItems) {
+      return item.subItems.some((sub) => location.pathname === sub.path);
+    }
+    return isActive(item.path);
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="h-[100vh] overflow-y-scroll bg-gray-50">
       {/* Mobile Menu Button */}
       <button
         onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-        className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-white rounded-lg shadow-lg"
+        className="lg:hidden fixed top-4 right-4 z-50 p-2 bg-white rounded-lg shadow-md"
       >
-        <svg
-          className="w-6 h-6"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M4 6h16M4 12h16M4 18h16"
-          />
-        </svg>
+        {isSidebarOpen ? (
+          <FiX color="#000" size={24} />
+        ) : (
+          <FiMenu color="#000" size={24} />
+        )}
       </button>
 
-      {/* Sidebar Overlay */}
-      {isSidebarOpen && (
-        <div
-          className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40"
-          onClick={() => setIsSidebarOpen(false)}
-        ></div>
-      )}
-
       {/* Sidebar */}
-      <div
-        className={`fixed  lg:static lg:translate-x-0 w-72 bg-white border-r border-gray-200 h-[100vh] overflow-y-scroll z-40 transition-transform duration-300 ${
+      <aside
+        className={`fixed top-0 left-0 h-full md:w-64 sm:w-full bg-white shadow-lg transform transition-transform duration-300 z-40 ${
           isSidebarOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
+        } lg:translate-x-0`}
       >
-        {/* Logo */}
-        <div className="flex items-center justify-between py-6 px-6 border-b border-gray-200">
-          <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-red-500 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">
-                <FiUser />
-              </span>
-            </div>
-            <span className="text-xl font-semibold text-gray-900">
-              Admin Panel
-            </span>
-          </div>
-          <button
-            onClick={() => setIsSidebarOpen(false)}
-            className="lg:hidden p-1 rounded-md hover:bg-gray-100"
-          >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
+        <div className="p-6 border-b border-gray-200">
+          <h2 className="text-2xl font-bold text-gray-900">Admin Panel</h2>
+          <p className="text-sm text-gray-600 mt-1">
+            English Learning Platform
+          </p>
         </div>
 
-        {/* User Info */}
-        <div className="px-6 py-4 border-b border-gray-200">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
-              <span className="text-red-600 font-semibold">
-                {user?.user?.firstname?.[0] || user?.firstname?.[0] || "A"}
-              </span>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-900">
-                {user?.user?.firstname || user?.firstname}{" "}
-                {user?.user?.lastname || user?.lastname}
-              </p>
-              <p className="text-xs text-gray-500">Administrator</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 px-4 py-6">
-          <div className="space-y-2">
+        <nav className="p-4">
+          <ul className="space-y-2 h-[60vh] overflow-y-scroll">
             {menuItems.map((item) => (
-              <button
-                key={item.path}
-                onClick={() => {
-                  navigate(item.path);
-                  setIsSidebarOpen(false);
-                }}
-                className={`w-full flex items-center px-4 py-3 text-left rounded-lg transition-all duration-200 ${
-                  isActive(item.path)
-                    ? "bg-red-50 text-red-700 border border-red-200"
-                    : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                }`}
-              >
-                <span className="text-xl mr-3">{item.icon}</span>
-                <span className="font-medium">{item.label}</span>
-              </button>
+              <li key={item.path}>
+                {item.subItems ? (
+                  <div>
+                    <button
+                      onClick={() => toggleSubmenu(item.path)}
+                      className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-colors ${
+                        isParentActive(item)
+                          ? "bg-blue-50 text-blue-600"
+                          : "text-gray-700 hover:bg-gray-100"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <item.icon size={20} />
+                        <span className="font-medium">{item.label}</span>
+                      </div>
+                      <FiChevronDown
+                        className={`transition-transform ${
+                          expandedMenus[item.path] ? "rotate-180" : ""
+                        }`}
+                        size={16}
+                      />
+                    </button>
+                    {expandedMenus[item.path] && (
+                      <ul className="mt-2 ml-9 space-y-1">
+                        {item.subItems.map((subItem) => (
+                          <li key={subItem.path}>
+                            <Link
+                              to={subItem.path}
+                              className={`block px-4 py-2 rounded-lg text-sm transition-colors ${
+                                isActive(subItem.path)
+                                  ? "bg-blue-50 text-blue-600"
+                                  : "text-gray-600 hover:bg-gray-100"
+                              }`}
+                            >
+                              {subItem.label}
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ) : (
+                  <Link
+                    to={item.path}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                      isActive(item.path)
+                        ? "bg-blue-50 text-blue-600"
+                        : "text-gray-700 hover:bg-gray-100"
+                    }`}
+                  >
+                    <item.icon size={20} />
+                    <div className="flex-1">
+                      <span className="font-medium">{item.label}</span>
+                      {item.description && (
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {item.description}
+                        </p>
+                      )}
+                    </div>
+                  </Link>
+                )}
+              </li>
             ))}
-            <button onClick={() => navigate("/admin/tests/listening/create")}>
-              Create Listening Test
-            </button>
-          </div>
+          </ul>
         </nav>
 
-        {/* Logout Button */}
-        <div className="px-4 pb-6">
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200">
           <button
             onClick={handleLogout}
-            className="w-full flex items-center px-4 py-3 text-left rounded-lg text-red-600 hover:bg-red-50 transition-all duration-200"
+            className="w-full flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
           >
-            <span className="text-xl mr-3">
-              <FiLogOut />
-            </span>
+            <FiLogOut size={20} />
             <span className="font-medium">Logout</span>
           </button>
         </div>
-      </div>
+      </aside>
+
+      {/* Overlay for mobile */}
+      {isSidebarOpen && (
+        <div
+          onClick={() => setIsSidebarOpen(false)}
+          className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-30"
+        />
+      )}
 
       {/* Main Content */}
-      <div className="flex-1 lg:ml-0">
-        <div className="p-4 lg:p-8 h-[100vh] overflow-hidden overflow-y-scroll pt-16 lg:pt-8 ">
-          {children}
-        </div>
-      </div>
+      <main className="lg:ml-64 min-h-screen">
+        <div className="p-6">{children}</div>
+      </main>
     </div>
   );
 };

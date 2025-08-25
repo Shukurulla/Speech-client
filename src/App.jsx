@@ -20,8 +20,16 @@ import AdminGrades from "./pages/admin/Grades";
 import AdminLessons from "./pages/admin/Lessons";
 import AdminTests from "./pages/admin/Tests";
 import AdminResults from "./pages/admin/Results";
+import AdminTopicTests from "./pages/admin/TopicTests";
+import AdminMockTests from "./pages/admin/MockTests";
+
+// User Components
 import Grades from "./pages/Grades.jsx";
 import StudentResults from "./pages/StudentResult.jsx";
+import TopicSpeaking from "./pages/TopicSpeaking";
+import TopicTestResult from "./pages/TopicTestResult";
+import MockTest from "./pages/MockTest";
+import MockTestResult from "./pages/MockTestResult";
 
 function App() {
   const navigate = useNavigate();
@@ -98,6 +106,8 @@ function App() {
           <Route path="/admin/grades" element={<AdminGrades />} />
           <Route path="/admin/lessons" element={<AdminLessons />} />
           <Route path="/admin/tests" element={<AdminTests />} />
+          <Route path="/admin/topic-tests" element={<AdminTopicTests />} />
+          <Route path="/admin/mock-tests" element={<AdminMockTests />} />
           <Route path="/admin/results" element={<AdminResults />} />
           <Route
             path="/admin/tests/listening/create"
@@ -132,8 +142,30 @@ function App() {
 
         {/* Test Questions - Shows questions for selected test */}
         <Route path="/test/:testId" element={<TestQuestions />} />
+
+        {/* Grades Page */}
         <Route path="/grades/" element={<Grades />} />
+
+        {/* Results Page */}
         <Route path="/results" element={<StudentResults />} />
+
+        {/* Topic Speaking Test Routes - New */}
+        <Route
+          path="/topic-speaking/:gradeId/:lessonNumber"
+          element={<TopicSpeaking />}
+        />
+        <Route
+          path="/topic-test/result/:resultId"
+          element={<TopicTestResult />}
+        />
+
+        {/* Mock Test Routes - New */}
+        <Route path="/mock-test/:gradeId" element={<MockTest />} />
+        <Route
+          path="/mock-test/result/:resultId"
+          element={<MockTestResult />}
+        />
+
         {/* Settings */}
         <Route
           path="/settings"
@@ -141,6 +173,35 @@ function App() {
             <ResponsiveLayout
               activePage={<Settings />}
               activeTab={"Settings"}
+            />
+          }
+        />
+
+        {/* 404 - Page Not Found */}
+        <Route
+          path="*"
+          element={
+            <ResponsiveLayout
+              activePage={
+                <div className="min-h-screen flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="text-gray-400 text-6xl mb-4">404</div>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                      Page Not Found
+                    </h2>
+                    <p className="text-gray-600 mb-6">
+                      The page you're looking for doesn't exist.
+                    </p>
+                    <button
+                      onClick={() => navigate("/")}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+                    >
+                      Go to Dashboard
+                    </button>
+                  </div>
+                </div>
+              }
+              activeTab={"Dashboard"}
             />
           }
         />
