@@ -5,6 +5,7 @@ import TestResultService from "../service/testresult.service";
 import SpeechTest from "../components/SpeechTest";
 import ListeningTest from "../components/ListeningTest";
 import ResponsiveLayout from "../components/Layout";
+import axios from "../service/api";
 import { toast } from "react-hot-toast";
 import {
   FiBookOpen,
@@ -18,6 +19,8 @@ import {
   FiTrendingUp,
   FiClock,
   FiStar,
+  FiMessageCircle,
+  FiFileText,
 } from "react-icons/fi";
 
 const LessonTests = () => {
@@ -30,12 +33,19 @@ const LessonTests = () => {
   const [listeningTests, setListeningTests] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Topic test state
+  const [topicTest, setTopicTest] = useState(null);
+  const [showTopicTest, setShowTopicTest] = useState(false);
+
+  // Mock test state
+  const [showMockTest, setShowMockTest] = useState(false);
+
   // Test history states
   const [testHistory, setTestHistory] = useState([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 
   // Test execution states
-  const [activeTestType, setActiveTestType] = useState(null); // 'speech' or 'listening'
+  const [activeTestType, setActiveTestType] = useState(null);
   const [currentTestDetails, setCurrentTestDetails] = useState([]);
   const [currentDetailIndex, setCurrentDetailIndex] = useState(0);
   const [testResults, setTestResults] = useState([]);
@@ -46,10 +56,14 @@ const LessonTests = () => {
   const [completedTests, setCompletedTests] = useState({
     speech: false,
     listening: false,
+    topic: false,
+    mock: false,
   });
   const [finalResults, setFinalResults] = useState({
     speech: null,
     listening: null,
+    topic: null,
+    mock: null,
   });
 
   const lesson = location.state?.lesson;
@@ -59,14 +73,45 @@ const LessonTests = () => {
     if (lessonId) {
       fetchTests();
       fetchTestHistory();
+      if (lesson && grade) {
+        checkTopicTest();
+      }
     }
   }, [lessonId]);
+
+  const checkTopicTest = async () => {
+    try {
+      const lessonNumber = lesson?.orderNumber;
+
+      // Check if this is a milestone lesson (5, 10, 15, or 20)
+      if ([5, 10, 15, 20].includes(lessonNumber)) {
+        try {
+          const response = await axios.get(
+            `/topic-test/grade/${grade._id}/lesson/${lessonNumber}`
+          );
+
+          if (response.data?.status === "success" && response.data?.data) {
+            setTopicTest(response.data.data);
+            setShowTopicTest(true);
+          }
+        } catch (err) {
+          console.log("No topic test for this lesson");
+        }
+      }
+
+      // Check if this is lesson 20 for mock test
+      if (lessonNumber === 20) {
+        setShowMockTest(true);
+      }
+    } catch (error) {
+      console.log("Error checking topic test:", error);
+    }
+  };
 
   const fetchTests = async () => {
     try {
       const response = await TestService.getAllTests();
       if (response.status === "success") {
-        // Filter tests by lesson and separate by type
         const lessonTests = response.data.filter(
           (test) => test.lessonId === lessonId
         );
@@ -93,7 +138,7 @@ const LessonTests = () => {
       setIsLoadingHistory(true);
       const response = await TestResultService.getMyResults({
         lessonId: lessonId,
-        limit: 100, // Get all results for this lesson
+        limit: 100,
       });
 
       if (response.status === "success") {
@@ -113,7 +158,6 @@ const LessonTests = () => {
       for (const test of tests) {
         const response = await TestService.getTestById(test._id);
         if (response.status === "success" && response.data.testItems) {
-          // Add test metadata to each detail
           const detailsWithMeta = response.data.testItems.map((item) => ({
             ...item,
             testId: test._id,
@@ -131,12 +175,10 @@ const LessonTests = () => {
     }
   };
 
-  // Get test statistics for a specific test type
   const getTestTypeStats = (testType) => {
     const tests = testType === "speech" ? speechTests : listeningTests;
     const testIds = tests.map((t) => t._id);
 
-    // Filter history for this test type
     const typeHistory = testHistory.filter((result) =>
       testIds.includes(result.testId)
     );
@@ -153,7 +195,6 @@ const LessonTests = () => {
       };
     }
 
-    // Sort by date to get latest
     const sortedHistory = typeHistory.sort(
       (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
     );
@@ -163,7 +204,6 @@ const LessonTests = () => {
       typeHistory.reduce((sum, r) => sum + r.score, 0) / typeHistory.length
     );
 
-    // Calculate improvement (compare first vs recent attempts)
     const improvement =
       typeHistory.length > 1
         ? lastResult.score - typeHistory[typeHistory.length - 1].score
@@ -198,6 +238,16 @@ const LessonTests = () => {
     setCurrentTestDetails(details);
   };
 
+  const handleStartTopicTest = () => {
+    navigate(`/topic-speaking/${grade._id}/${lesson.orderNumber}`, {
+      state: { grade, lesson },
+    });
+  };
+
+  const handleStartMockTest = () => {
+    navigate(`/mock-test/${grade._id}`);
+  };
+
   const handleQuestionComplete = (questionId, score, userAnswer) => {
     const currentDetail = currentTestDetails[currentDetailIndex];
 
@@ -222,13 +272,16 @@ const LessonTests = () => {
     if (currentDetailIndex < currentTestDetails.length - 1) {
       setCurrentDetailIndex(currentDetailIndex + 1);
     } else {
-      // Test type completed
       completeTestType();
     }
   };
 
   const handleBackToTests = () => {
-    navigate(`/grade/${grade?._id}`, { state: { grade } });
+    if (grade?._id) {
+      navigate(`/grade/${grade._id}`, { state: { grade } });
+    } else {
+      navigate("/");
+    }
   };
 
   const handleQuitTest = () => {
@@ -245,7 +298,6 @@ const LessonTests = () => {
     try {
       setIsSubmitting(true);
 
-      // Group results by test
       const testGroups = {};
       testResults.forEach((result) => {
         if (!testGroups[result.testId]) {
@@ -258,7 +310,6 @@ const LessonTests = () => {
       let totalQuestions = testResults.length;
       let correctAnswers = testResults.filter((r) => r.isCorrect).length;
 
-      // Submit results for each test
       for (const [testId, results] of Object.entries(testGroups)) {
         const testScore =
           results.reduce((sum, r) => sum + r.score, 0) / results.length;
@@ -283,11 +334,9 @@ const LessonTests = () => {
         });
       }
 
-      // Calculate overall score for this test type
       overallScore =
         testResults.reduce((sum, r) => sum + r.score, 0) / testResults.length;
 
-      // Mark test type as completed
       setCompletedTests((prev) => ({
         ...prev,
         [activeTestType]: true,
@@ -305,13 +354,11 @@ const LessonTests = () => {
         },
       }));
 
-      // Reset test execution states
       setActiveTestType(null);
       setCurrentTestDetails([]);
       setCurrentDetailIndex(0);
       setTestResults([]);
 
-      // Refresh test history to show new results
       await fetchTestHistory();
 
       toast.success(
@@ -352,7 +399,7 @@ const LessonTests = () => {
     }));
   };
 
-  // Show individual question
+  // Show individual question during test
   if (activeTestType && currentTestDetails[currentDetailIndex]) {
     const TestComponent =
       activeTestType === "speech" ? SpeechTest : ListeningTest;
@@ -370,191 +417,339 @@ const LessonTests = () => {
     );
   }
 
-  // Show tests overview page
+  // Loading state
+  if (isLoading || isLoadingHistory) {
+    return (
+      <ResponsiveLayout
+        activePage={
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+          </div>
+        }
+        activeTab="Dashboard"
+      />
+    );
+  }
+
+  const speechStats = getTestTypeStats("speech");
+  const listeningStats = getTestTypeStats("listening");
+
+  // Main content
   return (
     <ResponsiveLayout
-      activePage={<LessonTestsContent />}
+      activePage={
+        <div className="max-w-7xl mx-auto">
+          <button
+            onClick={handleBackToTests}
+            className="mb-6 flex items-center text-blue-600 hover:text-blue-700 font-medium"
+          >
+            <svg
+              className="w-5 h-5 mr-1"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 19l-7-7 7-7"
+              />
+            </svg>
+            Back to Lessons
+          </button>
+
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              {lesson?.title || "Lesson"} - Tests
+            </h1>
+            <p className="text-lg text-gray-600">
+              {grade?.name} - Lesson {lesson?.orderNumber}
+            </p>
+            <div className="mt-4 flex items-center space-x-6 text-sm text-gray-500">
+              <span className="flex items-center gap-2">
+                <FiMic /> {speechTests.length} Speech Tests
+              </span>
+              <span className="flex items-center gap-2">
+                <FiHeadphones /> {listeningTests.length} Listening Tests
+              </span>
+              {showTopicTest && (
+                <span className="flex items-center gap-2 text-purple-600 font-medium">
+                  <FiMessageCircle /> Topic Test Available
+                </span>
+              )}
+              {showMockTest && (
+                <span className="flex items-center gap-2 text-orange-600 font-medium">
+                  <FiFileText /> Mock Test Available
+                </span>
+              )}
+              <span className="flex items-center gap-2">
+                <FiAward /> {testHistory.length} Total Attempts
+              </span>
+            </div>
+          </div>
+
+          {/* Test Type Cards Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Speech Test Card */}
+            <TestTypeCard
+              type="speech"
+              title="Speech Tests"
+              description="Practice speaking by reading texts aloud and get scored on pronunciation accuracy"
+              icon={<FiMic size={32} />}
+              color="bg-blue-500"
+              testCount={speechTests.length}
+              isCompleted={completedTests.speech}
+              result={finalResults.speech}
+              stats={speechStats}
+              onStart={() => startTestType("speech")}
+              onReset={() => resetTestType("speech")}
+              disabled={speechTests.length === 0}
+            />
+
+            {/* Listening Test Card */}
+            <TestTypeCard
+              type="listening"
+              title="Listening Tests"
+              description="Listen to audio and write what you hear to test your listening comprehension"
+              icon={<FiHeadphones size={32} />}
+              color="bg-purple-500"
+              testCount={listeningTests.length}
+              isCompleted={completedTests.listening}
+              result={finalResults.listening}
+              stats={listeningStats}
+              onStart={() => startTestType("listening")}
+              onReset={() => resetTestType("listening")}
+              disabled={listeningTests.length === 0}
+            />
+
+            {/* Topic Test Card - Shows only for lessons 5, 10, 15, 20 */}
+            {showTopicTest && topicTest && (
+              <TopicTestCard
+                topicTest={topicTest}
+                lessonNumber={lesson?.orderNumber}
+                gradeId={grade?._id}
+                isCompleted={completedTests.topic}
+                onStart={handleStartTopicTest}
+              />
+            )}
+
+            {/* Mock Test Card - Shows only for lesson 20 */}
+            {showMockTest && (
+              <MockTestCard
+                gradeId={grade?._id}
+                isCompleted={completedTests.mock}
+                onStart={handleStartMockTest}
+              />
+            )}
+          </div>
+
+          {/* Overall Progress */}
+          {(completedTests.speech || completedTests.listening) && (
+            <div className="mt-12 bg-green-50 rounded-xl p-8">
+              <div className="text-center">
+                <div className="flex justify-center mb-4">
+                  <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center">
+                    <FiAward className="text-white text-2xl" />
+                  </div>
+                </div>
+                <h3 className="text-2xl font-bold text-green-800 mb-4">
+                  Great Job!
+                </h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
+                  {completedTests.speech && finalResults.speech && (
+                    <div className="bg-white rounded-lg p-4">
+                      <div className="flex items-center justify-center mb-2">
+                        <FiMic className="text-blue-500 text-xl mr-2" />
+                        <span className="font-semibold">Speech Test</span>
+                      </div>
+                      <div className="text-2xl font-bold text-blue-600">
+                        {finalResults.speech.score}%
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        {finalResults.speech.correctAnswers}/
+                        {finalResults.speech.totalQuestions} correct
+                      </div>
+                    </div>
+                  )}
+
+                  {completedTests.listening && finalResults.listening && (
+                    <div className="bg-white rounded-lg p-4">
+                      <div className="flex items-center justify-center mb-2">
+                        <FiHeadphones className="text-purple-500 text-xl mr-2" />
+                        <span className="font-semibold">Listening Test</span>
+                      </div>
+                      <div className="text-2xl font-bold text-purple-600">
+                        {finalResults.listening.score}%
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        {finalResults.listening.correctAnswers}/
+                        {finalResults.listening.totalQuestions} correct
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-6">
+                  <button
+                    onClick={() => navigate("/results")}
+                    className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors mr-4"
+                  >
+                    View Detailed Results
+                  </button>
+                  <button
+                    onClick={handleBackToTests}
+                    className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+                  >
+                    Continue Learning
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* No Tests Available */}
+          {speechTests.length === 0 &&
+            listeningTests.length === 0 &&
+            !showTopicTest &&
+            !showMockTest && (
+              <div className="text-center py-12">
+                <div className="text-gray-400 text-6xl mb-4">📝</div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  No tests available
+                </h3>
+                <p className="text-gray-600 mb-4">
+                  Tests for this lesson haven't been created yet.
+                </p>
+                <p className="text-sm text-blue-600">
+                  Please contact your teacher to add tests to this lesson.
+                </p>
+              </div>
+            )}
+        </div>
+      }
       activeTab="Dashboard"
     />
   );
-
-  function LessonTestsContent() {
-    if (isLoading || isLoadingHistory) {
-      return (
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
-        </div>
-      );
-    }
-
-    const speechStats = getTestTypeStats("speech");
-    const listeningStats = getTestTypeStats("listening");
-
-    return (
-      <div className="max-w-7xl mx-auto">
-        {/* Back Button */}
-        <button
-          onClick={handleBackToTests}
-          className="mb-6 flex items-center text-blue-600 hover:text-blue-700 font-medium"
-        >
-          <svg
-            className="w-5 h-5 mr-1"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M15 19l-7-7 7-7"
-            />
-          </svg>
-          Back to Lessons
-        </button>
-
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            {lesson?.title || "Lesson"} - Tests
-          </h1>
-          <p className="text-lg text-gray-600">
-            {grade?.name} - Lesson {lesson?.orderNumber}
-          </p>
-          <div className="mt-4 flex items-center space-x-6 text-sm text-gray-500">
-            <span className="flex items-center gap-2">
-              <FiMic /> {speechTests.length} Speech Tests
-            </span>
-            <span className="flex items-center gap-2">
-              <FiHeadphones /> {listeningTests.length} Listening Tests
-            </span>
-            <span className="flex items-center gap-2">
-              <FiAward /> {testHistory.length} Total Attempts
-            </span>
-          </div>
-        </div>
-
-        {/* Test Type Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {/* Speech Test Card */}
-          <TestTypeCard
-            type="speech"
-            title="Speech Tests"
-            description="Practice speaking by reading texts aloud and get scored on pronunciation accuracy"
-            icon={<FiMic size={32} />}
-            color="bg-blue-500"
-            testCount={speechTests.length}
-            isCompleted={completedTests.speech}
-            result={finalResults.speech}
-            stats={speechStats}
-            onStart={() => startTestType("speech")}
-            onReset={() => resetTestType("speech")}
-            disabled={speechTests.length === 0}
-          />
-
-          {/* Listening Test Card */}
-          <TestTypeCard
-            type="listening"
-            title="Listening Tests"
-            description="Listen to audio and write what you hear to test your listening comprehension"
-            icon={<FiHeadphones size={32} />}
-            color="bg-purple-500"
-            testCount={listeningTests.length}
-            isCompleted={completedTests.listening}
-            result={finalResults.listening}
-            stats={listeningStats}
-            onStart={() => startTestType("listening")}
-            onReset={() => resetTestType("listening")}
-            disabled={listeningTests.length === 0}
-          />
-        </div>
-
-        {/* Overall Progress */}
-        {(completedTests.speech || completedTests.listening) && (
-          <div className="mt-12 bg-green-50 rounded-xl p-8">
-            <div className="text-center">
-              <div className="flex justify-center mb-4">
-                <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center">
-                  <FiAward className="text-white text-2xl" />
-                </div>
-              </div>
-              <h3 className="text-2xl font-bold text-green-800 mb-4">
-                Great Job!
-              </h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
-                {completedTests.speech && finalResults.speech && (
-                  <div className="bg-white rounded-lg p-4">
-                    <div className="flex items-center justify-center mb-2">
-                      <FiMic className="text-blue-500 text-xl mr-2" />
-                      <span className="font-semibold">Speech Test</span>
-                    </div>
-                    <div className="text-2xl font-bold text-blue-600">
-                      {finalResults.speech.score}%
-                    </div>
-                    <div className="text-sm text-gray-600">
-                      {finalResults.speech.correctAnswers}/
-                      {finalResults.speech.totalQuestions} correct
-                    </div>
-                  </div>
-                )}
-
-                {completedTests.listening && finalResults.listening && (
-                  <div className="bg-white rounded-lg p-4">
-                    <div className="flex items-center justify-center mb-2">
-                      <FiHeadphones className="text-purple-500 text-xl mr-2" />
-                      <span className="font-semibold">Listening Test</span>
-                    </div>
-                    <div className="text-2xl font-bold text-purple-600">
-                      {finalResults.listening.score}%
-                    </div>
-                    <div className="text-sm text-gray-600">
-                      {finalResults.listening.correctAnswers}/
-                      {finalResults.listening.totalQuestions} correct
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="mt-6">
-                <button
-                  onClick={() => navigate("/results")}
-                  className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors mr-4"
-                >
-                  View Detailed Results
-                </button>
-                <button
-                  onClick={handleBackToTests}
-                  className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
-                >
-                  Continue Learning
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* No Tests Available */}
-        {speechTests.length === 0 && listeningTests.length === 0 && (
-          <div className="text-center py-12">
-            <div className="text-gray-400 text-6xl mb-4">📝</div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              No tests available
-            </h3>
-            <p className="text-gray-600 mb-4">
-              Tests for this lesson haven't been created yet.
-            </p>
-            <p className="text-sm text-blue-600">
-              Please contact your teacher to add tests to this lesson.
-            </p>
-          </div>
-        )}
-      </div>
-    );
-  }
 };
 
-// Enhanced Test Type Card Component with Statistics
+// Topic Test Card Component
+const TopicTestCard = ({
+  topicTest,
+  lessonNumber,
+  gradeId,
+  isCompleted,
+  onStart,
+}) => {
+  return (
+    <div className="bg-white rounded-xl shadow-sm border-2 border-purple-200 p-8 transition-all duration-300 hover:shadow-lg">
+      <div className="text-center">
+        {/* Icon */}
+        <div className="relative inline-block mb-6">
+          <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white">
+            <FiMessageCircle size={32} />
+          </div>
+          {isCompleted && (
+            <div className="absolute -top-2 -right-2 w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+              <FiCheck className="text-white text-sm" />
+            </div>
+          )}
+        </div>
+
+        {/* Content */}
+        <h3 className="text-xl font-bold text-gray-900 mb-3">
+          Topic Speaking Test
+        </h3>
+        <div className="mb-4">
+          <span className="inline-block bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-sm font-medium">
+            After Lesson {lessonNumber}
+          </span>
+        </div>
+        <h4 className="text-lg font-semibold text-gray-800 mb-2">
+          {topicTest.topic}
+        </h4>
+        <p className="text-gray-600 text-sm mb-6 leading-relaxed">
+          {topicTest.prompt}
+        </p>
+
+        {/* Test Info */}
+        <div className="mb-6">
+          <div className="flex items-center justify-center space-x-4 text-sm text-gray-500">
+            <span className="flex items-center gap-1">
+              <FiClock />
+              {topicTest.duration} seconds
+            </span>
+            <span>•</span>
+            <span>AI Evaluated</span>
+          </div>
+        </div>
+
+        {/* Action Button */}
+        <button
+          onClick={onStart}
+          className="w-full py-3 px-6 rounded-lg font-semibold transition-colors bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white"
+        >
+          {isCompleted ? "Retake Topic Test" : "Start Topic Test"}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// Mock Test Card Component
+const MockTestCard = ({ gradeId, isCompleted, onStart }) => {
+  return (
+    <div className="bg-white rounded-xl shadow-sm border-2 border-orange-200 p-8 transition-all duration-300 hover:shadow-lg">
+      <div className="text-center">
+        {/* Icon */}
+        <div className="relative inline-block mb-6">
+          <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center text-white">
+            <FiFileText size={32} />
+          </div>
+          {isCompleted && (
+            <div className="absolute -top-2 -right-2 w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+              <FiCheck className="text-white text-sm" />
+            </div>
+          )}
+        </div>
+
+        {/* Content */}
+        <h3 className="text-xl font-bold text-gray-900 mb-3">Mock Test</h3>
+        <div className="mb-4">
+          <span className="inline-block bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-sm font-medium">
+            Complete Assessment
+          </span>
+        </div>
+        <p className="text-gray-600 text-sm mb-6 leading-relaxed">
+          Comprehensive test covering all 20 lessons. Test your overall
+          knowledge and progress.
+        </p>
+
+        {/* Test Info */}
+        <div className="mb-6">
+          <div className="flex items-center justify-center space-x-4 text-sm text-gray-500">
+            <span>20 Questions</span>
+            <span>•</span>
+            <span>60 Minutes</span>
+            <span>•</span>
+            <span>80% Pass</span>
+          </div>
+        </div>
+
+        {/* Action Button */}
+        <button
+          onClick={onStart}
+          className="w-full py-3 px-6 rounded-lg font-semibold transition-colors bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white"
+        >
+          {isCompleted ? "Retake Mock Test" : "Start Mock Test"}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// Enhanced Test Type Card Component
 const TestTypeCard = ({
   type,
   title,
@@ -605,7 +800,6 @@ const TestTypeCard = ({
       }`}
     >
       <div className="text-center">
-        {/* Icon and Status */}
         <div className="relative inline-block mb-6">
           <div
             className={`w-20 h-20 ${
@@ -626,13 +820,11 @@ const TestTypeCard = ({
           )}
         </div>
 
-        {/* Content */}
         <h3 className="text-xl font-bold text-gray-900 mb-3">{title}</h3>
         <p className="text-gray-600 text-sm mb-4 leading-relaxed">
           {description}
         </p>
 
-        {/* Test Info */}
         <div className="mb-6">
           <div className="flex items-center justify-center space-x-4 text-sm text-gray-500 mb-4">
             <span>
@@ -646,7 +838,6 @@ const TestTypeCard = ({
             )}
           </div>
 
-          {/* Statistics Display */}
           {stats.hasHistory && (
             <div className="bg-white rounded-lg p-4 border border-gray-200 mb-4">
               <div className="grid grid-cols-2 gap-4 text-center">
@@ -687,7 +878,6 @@ const TestTypeCard = ({
             </div>
           )}
 
-          {/* Current Session Results Display */}
           {isCompleted && result && (
             <div className="bg-green-100 rounded-lg p-4 border border-green-200 mb-4">
               <div className="text-sm text-green-800 mb-2 font-medium">
@@ -717,7 +907,6 @@ const TestTypeCard = ({
           )}
         </div>
 
-        {/* Action Buttons */}
         <div className="space-y-3">
           {!isCompleted ? (
             <button

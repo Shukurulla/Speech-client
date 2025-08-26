@@ -1,38 +1,46 @@
+// src/pages/admin/AdminGrades.jsx
 import React, { useState, useEffect } from "react";
+import GradeService from "../../service/grade.service";
+import LessonService from "../../service/lesson.service";
+import TestService from "../../service/test.service";
+import CategoryService from "../../service/category.service";
 import AdminLayout from "../../components/admin/AdminLayout";
-import axios from "../../service/api";
+import DictionaryModal from "../../components/DictionaryModal";
 import { toast } from "react-hot-toast";
 import {
   FiBook,
   FiPlus,
   FiEdit2,
   FiTrash2,
-  FiChevronDown,
-  FiChevronRight,
   FiMusic,
-  FiPaperclip,
+  FiSettings,
+  FiChevronRight,
+  FiFolder,
+  FiFileText,
+  FiGlobe,
+  FiX,
+  FiUpload,
+  FiHeadphones,
+  FiMic,
 } from "react-icons/fi";
 
 const AdminGrades = () => {
   const [grades, setGrades] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [expandedGrades, setExpandedGrades] = useState(new Set());
-  const [gradeLessons, setGradeLessons] = useState({});
-  const [gradeTests, setGradeTests] = useState({});
-  const [showModals, setShowModals] = useState({
-    grade: false,
-    lesson: false,
-    test: false,
-    dictionary: false,
-  });
-  const [editingItems, setEditingItems] = useState({
-    grade: null,
-    lesson: null,
-    test: null,
-  });
-  const [selectedGrade, setSelectedGrade] = useState(null);
-  const [selectedLesson, setSelectedLesson] = useState(null);
+  const [lessons, setLessons] = useState({});
   const [categories, setCategories] = useState([]);
+  const [expandedGrade, setExpandedGrade] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [selectedLesson, setSelectedLesson] = useState(null);
+
+  // Modal states
+  const [showDictionaryModal, setShowDictionaryModal] = useState(false);
+  const [showAddGradeModal, setShowAddGradeModal] = useState(false);
+  const [showAddLessonModal, setShowAddLessonModal] = useState(false);
+  const [showAddTestModal, setShowAddTestModal] = useState(false);
+  const [editingGrade, setEditingGrade] = useState(null);
+  const [editingLesson, setEditingLesson] = useState(null);
+  const [selectedGradeForLesson, setSelectedGradeForLesson] = useState(null);
+  const [selectedLessonForTest, setSelectedLessonForTest] = useState(null);
 
   // Form states
   const [gradeForm, setGradeForm] = useState({ name: "", description: "" });
@@ -46,8 +54,9 @@ const AdminGrades = () => {
     title: "",
     categoryId: "",
     difficulty: "medium",
-    type: "speech", // speech or listening
+    type: "speech",
   });
+  const [audioFiles, setAudioFiles] = useState([]);
 
   useEffect(() => {
     fetchGrades();
@@ -56,828 +65,767 @@ const AdminGrades = () => {
 
   const fetchGrades = async () => {
     try {
-      const { data } = await axios.get("/grade");
-      setGrades(data.data);
+      setLoading(true);
+      const response = await GradeService.getAllGrades();
+      if (response.status === "success") {
+        setGrades(response.data);
+        for (const grade of response.data) {
+          fetchLessons(grade._id);
+        }
+      }
     } catch (error) {
+      console.error("Error fetching grades:", error);
       toast.error("Failed to load grades");
     } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const fetchCategories = async () => {
-    try {
-      const { data } = await axios.get("/category/list");
-      setCategories(data.data);
-    } catch (error) {
-      console.error("Error fetching categories:", error);
+      setLoading(false);
     }
   };
 
   const fetchLessons = async (gradeId) => {
-    if (gradeLessons[gradeId]) return;
-
     try {
-      const { data } = await axios.get(`/lesson/grade/${gradeId}`);
-      setGradeLessons((prev) => ({ ...prev, [gradeId]: data.data }));
-
-      // Fetch tests for each lesson
-      data.data.forEach((lesson) => fetchTestsForLesson(lesson._id));
+      const response = await LessonService.getLessonsByGrade(gradeId);
+      if (response.status === "success") {
+        setLessons((prev) => ({
+          ...prev,
+          [gradeId]: response.data,
+        }));
+      }
     } catch (error) {
       console.error("Error fetching lessons:", error);
     }
   };
 
-  const fetchTestsForLesson = async (lessonId) => {
+  const fetchCategories = async () => {
     try {
-      const { data } = await axios.get("/test/all");
-      const lessonTests = data.data.filter(
-        (test) => test.lessonId === lessonId
-      );
-      setGradeTests((prev) => ({ ...prev, [lessonId]: lessonTests }));
+      const response = await CategoryService.getCategories();
+      setCategories(response || []);
     } catch (error) {
-      console.error("Error fetching tests:", error);
+      console.error("Error fetching categories:", error);
     }
+  };
+
+  // Grade handlers
+  const handleAddGrade = async () => {
+    try {
+      if (!gradeForm.name) {
+        toast.error("Grade name is required");
+        return;
+      }
+      await GradeService.createGrade(gradeForm);
+      setShowAddGradeModal(false);
+      setGradeForm({ name: "", description: "" });
+      fetchGrades();
+    } catch (error) {
+      console.error("Error adding grade:", error);
+    }
+  };
+
+  const handleUpdateGrade = async () => {
+    try {
+      if (!gradeForm.name) {
+        toast.error("Grade name is required");
+        return;
+      }
+      await GradeService.updateGrade(editingGrade._id, gradeForm);
+      setEditingGrade(null);
+      setGradeForm({ name: "", description: "" });
+      fetchGrades();
+    } catch (error) {
+      console.error("Error updating grade:", error);
+    }
+  };
+
+  const handleDeleteGrade = async (gradeId) => {
+    if (window.confirm("Are you sure you want to delete this grade?")) {
+      try {
+        await GradeService.deleteGrade(gradeId);
+        fetchGrades();
+      } catch (error) {
+        console.error("Error deleting grade:", error);
+      }
+    }
+  };
+
+  // Lesson handlers
+  const handleAddLesson = async () => {
+    try {
+      if (!lessonForm.title) {
+        toast.error("Lesson title is required");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("title", lessonForm.title);
+      formData.append("description", lessonForm.description);
+      formData.append("gradeId", selectedGradeForLesson);
+      if (lessonForm.orderNumber) {
+        formData.append("orderNumber", lessonForm.orderNumber);
+      }
+
+      audioFiles.forEach((file) => {
+        formData.append("audioFiles", file);
+      });
+
+      await LessonService.createLesson(formData);
+      setShowAddLessonModal(false);
+      setLessonForm({
+        title: "",
+        description: "",
+        orderNumber: "",
+        audioFiles: [],
+      });
+      setAudioFiles([]);
+      fetchLessons(selectedGradeForLesson);
+      toast.success("Lesson created successfully!");
+    } catch (error) {
+      console.error("Error adding lesson:", error);
+    }
+  };
+
+  const handleDeleteLesson = async (lessonId, gradeId) => {
+    if (window.confirm("Are you sure you want to delete this lesson?")) {
+      try {
+        await LessonService.deleteLesson(lessonId);
+        fetchLessons(gradeId);
+        toast.success("Lesson deleted successfully!");
+      } catch (error) {
+        console.error("Error deleting lesson:", error);
+      }
+    }
+  };
+
+  // Test handlers
+  const handleAddTest = async () => {
+    try {
+      if (!testForm.title || !testForm.categoryId) {
+        toast.error("Please fill in all required fields");
+        return;
+      }
+
+      const testData = {
+        title: testForm.title,
+        categoryId: testForm.categoryId,
+        difficulty: testForm.difficulty,
+        type: testForm.type,
+        gradeId: selectedLessonForTest.gradeId,
+        lessonId: selectedLessonForTest._id,
+      };
+
+      await TestService.createTest(testData);
+      setShowAddTestModal(false);
+      setTestForm({
+        title: "",
+        categoryId: "",
+        difficulty: "medium",
+        type: "speech",
+      });
+      toast.success("Test created successfully!");
+    } catch (error) {
+      console.error("Error adding test:", error);
+    }
+  };
+
+  const handleAudioFileChange = (e) => {
+    const files = Array.from(e.target.files);
+    setAudioFiles(files);
+  };
+
+  const openAddLessonModal = (gradeId) => {
+    setSelectedGradeForLesson(gradeId);
+    setShowAddLessonModal(true);
+  };
+
+  const openAddTestModal = (lesson, gradeId) => {
+    setSelectedLessonForTest({ ...lesson, gradeId });
+    setShowAddTestModal(true);
+  };
+
+  const openDictionaryModal = (lesson) => {
+    setSelectedLesson(lesson);
+    setShowDictionaryModal(true);
   };
 
   const toggleGradeExpand = (gradeId) => {
-    const newExpanded = new Set(expandedGrades);
-    if (newExpanded.has(gradeId)) {
-      newExpanded.delete(gradeId);
-    } else {
-      newExpanded.add(gradeId);
-      fetchLessons(gradeId);
-    }
-    setExpandedGrades(newExpanded);
+    setExpandedGrade(expandedGrade === gradeId ? null : gradeId);
   };
-
-  // Grade CRUD
-  const handleGradeSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      if (editingItems.grade) {
-        await axios.put(`/grade/${editingItems.grade._id}`, gradeForm);
-        toast.success("Grade updated successfully");
-      } else {
-        await axios.post("/grade", gradeForm);
-        toast.success("Grade created successfully");
-      }
-      closeModals();
-      fetchGrades();
-    } catch (error) {
-      toast.error(error.response?.data?.message || "Operation failed");
-    }
-  };
-
-  const deleteGrade = async (gradeId) => {
-    if (window.confirm("Are you sure you want to delete this grade?")) {
-      try {
-        await axios.delete(`/grade/${gradeId}`);
-        toast.success("Grade deleted successfully");
-        fetchGrades();
-      } catch (error) {
-        toast.error(error.response?.data?.message || "Failed to delete grade");
-      }
-    }
-  };
-
-  // Lesson CRUD
-  const handleLessonSubmit = async (e) => {
-    e.preventDefault();
-    const formData = new FormData();
-    formData.append("title", lessonForm.title);
-    formData.append("description", lessonForm.description);
-    formData.append("gradeId", selectedGrade._id);
-    if (lessonForm.orderNumber) {
-      formData.append("orderNumber", lessonForm.orderNumber);
-    }
-    lessonForm.audioFiles.forEach((file) => {
-      formData.append("audioFiles", file);
-    });
-
-    try {
-      if (editingItems.lesson) {
-        await axios.put(`/lesson/${editingItems.lesson._id}`, formData, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
-        toast.success("Lesson updated successfully");
-      } else {
-        await axios.post("/lesson", formData, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
-        toast.success("Lesson created successfully");
-      }
-      closeModals();
-      // Refresh lessons for this grade
-      delete gradeLessons[selectedGrade._id];
-      fetchLessons(selectedGrade._id);
-    } catch (error) {
-      toast.error(error.response?.data?.message || "Operation failed");
-    }
-  };
-
-  const deleteLesson = async (lessonId) => {
-    if (window.confirm("Are you sure you want to delete this lesson?")) {
-      try {
-        await axios.delete(`/lesson/${lessonId}`);
-        toast.success("Lesson deleted successfully");
-        // Refresh lessons
-        delete gradeLessons[selectedGrade._id];
-        fetchLessons(selectedGrade._id);
-      } catch (error) {
-        toast.error("Failed to delete lesson");
-      }
-    }
-  };
-
-  // Test CRUD
-  const handleTestSubmit = async (e) => {
-    e.preventDefault();
-    const testData = {
-      ...testForm,
-      lessonId: selectedLesson._id,
-      gradeId: selectedGrade._id,
-    };
-
-    try {
-      if (editingItems.test) {
-        await axios.put(`/test/${editingItems.test._id}`, testData);
-        toast.success("Test updated successfully");
-      } else {
-        await axios.post("/test/create", testData);
-        toast.success("Test created successfully");
-      }
-      closeModals();
-      fetchTestsForLesson(selectedLesson._id);
-    } catch (error) {
-      toast.error(error.response?.data?.message || "Operation failed");
-    }
-  };
-
-  const deleteTest = async (testId) => {
-    if (window.confirm("Are you sure you want to delete this test?")) {
-      try {
-        await axios.delete(`/test/${testId}`);
-        toast.success("Test deleted successfully");
-        fetchTestsForLesson(selectedLesson._id);
-      } catch (error) {
-        toast.error("Failed to delete test");
-      }
-    }
-  };
-
-  // Modal management
-  const openGradeModal = (grade = null) => {
-    setEditingItems((prev) => ({ ...prev, grade }));
-    setGradeForm(
-      grade
-        ? { name: grade.name, description: grade.description || "" }
-        : { name: "", description: "" }
-    );
-    setShowModals((prev) => ({ ...prev, grade: true }));
-  };
-
-  const openLessonModal = (grade, lesson = null) => {
-    setSelectedGrade(grade);
-    setEditingItems((prev) => ({ ...prev, lesson }));
-    setLessonForm(
-      lesson
-        ? {
-            title: lesson.title,
-            description: lesson.description || "",
-            orderNumber: lesson.orderNumber.toString(),
-            audioFiles: [],
-          }
-        : {
-            title: "",
-            description: "",
-            orderNumber: "",
-            audioFiles: [],
-          }
-    );
-    setShowModals((prev) => ({ ...prev, lesson: true }));
-  };
-
-  const openTestModal = (grade, lesson, test = null) => {
-    setSelectedGrade(grade);
-    setSelectedLesson(lesson);
-    setEditingItems((prev) => ({ ...prev, test }));
-    setTestForm(
-      test
-        ? {
-            title: test.title,
-            categoryId: test.category._id,
-            difficulty: test.difficulty || "medium",
-            type: test.type || "speech",
-          }
-        : {
-            title: "",
-            categoryId: "",
-            difficulty: "medium",
-            type: "speech",
-          }
-    );
-    setShowModals((prev) => ({ ...prev, test: true }));
-  };
-
-  const closeModals = () => {
-    setShowModals({
-      grade: false,
-      lesson: false,
-      test: false,
-      dictionary: false,
-    });
-    setEditingItems({ grade: null, lesson: null, test: null });
-    setSelectedGrade(null);
-    setSelectedLesson(null);
-  };
-
-  if (isLoading) {
-    return (
-      <AdminLayout>
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
-        </div>
-      </AdminLayout>
-    );
-  }
 
   return (
     <AdminLayout>
-      <div className="max-w-7xl mx-auto">
+      <div className="p-6">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              Grades Management
-            </h1>
-            <p className="text-gray-600">
-              Manage grades, lessons, and tests in one place
-            </p>
+        <div className="mb-8">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">
+                Grades & Curriculum Management
+              </h1>
+              <p className="text-gray-600 mt-2">
+                Manage grades, lessons, vocabulary, and tests
+              </p>
+            </div>
+            <button
+              onClick={() => setShowAddGradeModal(true)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+            >
+              <FiPlus /> Add Grade
+            </button>
           </div>
-          <button
-            onClick={() => openGradeModal()}
-            className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
-          >
-            <FiPlus /> Add Grade
-          </button>
         </div>
 
-        {/* Grades List */}
-        <div className="space-y-4">
-          {grades.map((grade) => (
-            <GradeAccordion
-              key={grade._id}
-              grade={grade}
-              isExpanded={expandedGrades.has(grade._id)}
-              onToggle={() => toggleGradeExpand(grade._id)}
-              lessons={gradeLessons[grade._id] || []}
-              tests={gradeTests}
-              onEditGrade={() => openGradeModal(grade)}
-              onDeleteGrade={() => deleteGrade(grade._id)}
-              onAddLesson={() => openLessonModal(grade)}
-              onEditLesson={(lesson) => openLessonModal(grade, lesson)}
-              onDeleteLesson={deleteLesson}
-              onAddTest={(lesson) => openTestModal(grade, lesson)}
-              onEditTest={(lesson, test) => openTestModal(grade, lesson, test)}
-              onDeleteTest={deleteTest}
-            />
-          ))}
-        </div>
+        {/* Loading State */}
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          </div>
+        ) : (
+          /* Grades List */
+          <div className="space-y-6">
+            {grades.map((grade) => (
+              <div
+                key={grade._id}
+                className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden"
+              >
+                {/* Grade Header */}
+                <div
+                  className="bg-gray-50 border-b border-gray-200 p-5 cursor-pointer hover:bg-gray-100 transition-colors"
+                  onClick={() => toggleGradeExpand(grade._id)}
+                >
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                        <FiFolder className="text-gray-600" /> {grade.name}
+                      </h2>
+                      {grade.description && (
+                        <p className="text-gray-600 text-sm mt-1">
+                          {grade.description}
+                        </p>
+                      )}
+                      <div className="mt-2 flex items-center gap-4 text-sm text-gray-500">
+                        <span>{lessons[grade._id]?.length || 0} lessons</span>
+                        <span>
+                          {lessons[grade._id]?.reduce(
+                            (acc, lesson) =>
+                              acc + (lesson.dictionaries?.length || 0),
+                            0
+                          ) || 0}{" "}
+                          total words
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingGrade(grade);
+                          setGradeForm({
+                            name: grade.name,
+                            description: grade.description,
+                          });
+                        }}
+                        className="p-2 text-gray-600 hover:bg-gray-200 rounded-lg transition-colors"
+                      >
+                        <FiEdit2 />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteGrade(grade._id);
+                        }}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      >
+                        <FiTrash2 />
+                      </button>
+                      <FiChevronRight
+                        className={`text-gray-400 transition-transform ${
+                          expandedGrade === grade._id ? "rotate-90" : ""
+                        }`}
+                      />
+                    </div>
+                  </div>
+                </div>
 
-        {/* Modals */}
-        {showModals.grade && (
-          <GradeModal
-            grade={editingItems.grade}
-            formData={gradeForm}
-            setFormData={setGradeForm}
-            onSubmit={handleGradeSubmit}
-            onClose={closeModals}
-          />
+                {/* Lessons List - Expanded */}
+                {expandedGrade === grade._id && (
+                  <div className="p-6">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="font-semibold text-gray-700 text-lg">
+                        Lessons
+                      </h3>
+                      <button
+                        onClick={() => openAddLessonModal(grade._id)}
+                        className="px-3 py-1 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors flex items-center gap-1"
+                      >
+                        <FiPlus /> Add Lesson
+                      </button>
+                    </div>
+
+                    {lessons[grade._id]?.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {lessons[grade._id].map((lesson) => (
+                          <div
+                            key={lesson._id}
+                            className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-all"
+                          >
+                            <div className="flex justify-between items-start mb-3">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="inline-block px-2 py-1 bg-purple-100 text-purple-700 text-xs font-semibold rounded">
+                                    Lesson {lesson.orderNumber}
+                                  </span>
+                                </div>
+                                <h4 className="font-semibold text-gray-900">
+                                  {lesson.title}
+                                </h4>
+                                {lesson.description && (
+                                  <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                                    {lesson.description}
+                                  </p>
+                                )}
+                              </div>
+                              <button
+                                onClick={() =>
+                                  handleDeleteLesson(lesson._id, grade._id)
+                                }
+                                className="text-red-500 hover:text-red-700"
+                              >
+                                <FiTrash2 size={16} />
+                              </button>
+                            </div>
+
+                            {/* Lesson Stats */}
+                            <div className="flex items-center gap-4 text-sm text-gray-600 mb-3">
+                              <div className="flex items-center gap-1">
+                                <FiBook className="text-purple-600" />
+                                <span>
+                                  {lesson.dictionaries?.length || 0} words
+                                </span>
+                              </div>
+                              {lesson.audioFiles?.length > 0 && (
+                                <div className="flex items-center gap-1">
+                                  <FiMusic className="text-blue-600" />
+                                  <span>{lesson.audioFiles.length} audio</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => openDictionaryModal(lesson)}
+                                className="flex-1 px-3 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-1"
+                              >
+                                <FiGlobe size={14} />
+                                Dictionary
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 text-gray-500">
+                        <FiFolder
+                          size={48}
+                          className="mx-auto mb-3 opacity-50"
+                        />
+                        <p>No lessons added yet</p>
+                        <button
+                          onClick={() => openAddLessonModal(grade._id)}
+                          className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        >
+                          Add First Lesson
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {grades.length === 0 && (
+              <div className="text-center py-12">
+                <FiFolder size={64} className="mx-auto mb-4 text-gray-400" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  No grades created yet
+                </h3>
+                <p className="text-gray-600 mb-4">
+                  Start by creating your first grade
+                </p>
+                <button
+                  onClick={() => setShowAddGradeModal(true)}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Create First Grade
+                </button>
+              </div>
+            )}
+          </div>
         )}
 
-        {showModals.lesson && (
-          <LessonModal
-            lesson={editingItems.lesson}
-            formData={lessonForm}
-            setFormData={setLessonForm}
-            selectedGrade={selectedGrade}
-            onSubmit={handleLessonSubmit}
-            onClose={closeModals}
-          />
+        {/* Add/Edit Grade Modal */}
+        {(showAddGradeModal || editingGrade) && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold">
+                  {editingGrade ? "Edit Grade" : "Add New Grade"}
+                </h2>
+                <button
+                  onClick={() => {
+                    setShowAddGradeModal(false);
+                    setEditingGrade(null);
+                    setGradeForm({ name: "", description: "" });
+                  }}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <FiX size={24} />
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Grade Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={gradeForm.name}
+                    onChange={(e) =>
+                      setGradeForm({ ...gradeForm, name: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g., 8-sinf, 9-sinf"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Description (Optional)
+                  </label>
+                  <textarea
+                    value={gradeForm.description}
+                    onChange={(e) =>
+                      setGradeForm({
+                        ...gradeForm,
+                        description: e.target.value,
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    rows="3"
+                    placeholder="Enter grade description..."
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowAddGradeModal(false);
+                    setEditingGrade(null);
+                    setGradeForm({ name: "", description: "" });
+                  }}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={editingGrade ? handleUpdateGrade : handleAddGrade}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  {editingGrade ? "Update" : "Add"} Grade
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
-        {showModals.test && (
-          <TestModal
-            test={editingItems.test}
-            formData={testForm}
-            setFormData={setTestForm}
-            categories={categories}
-            selectedGrade={selectedGrade}
-            selectedLesson={selectedLesson}
-            onSubmit={handleTestSubmit}
-            onClose={closeModals}
+        {/* Add Lesson Modal */}
+        {showAddLessonModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold">Add New Lesson</h2>
+                <button
+                  onClick={() => {
+                    setShowAddLessonModal(false);
+                    setLessonForm({
+                      title: "",
+                      description: "",
+                      orderNumber: "",
+                      audioFiles: [],
+                    });
+                    setAudioFiles([]);
+                  }}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <FiX size={24} />
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Lesson Title *
+                    </label>
+                    <input
+                      type="text"
+                      value={lessonForm.title}
+                      onChange={(e) =>
+                        setLessonForm({ ...lessonForm, title: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Enter lesson title"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Order Number
+                    </label>
+                    <input
+                      type="number"
+                      value={lessonForm.orderNumber}
+                      onChange={(e) =>
+                        setLessonForm({
+                          ...lessonForm,
+                          orderNumber: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Auto-generated if empty"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Description (Optional)
+                  </label>
+                  <textarea
+                    value={lessonForm.description}
+                    onChange={(e) =>
+                      setLessonForm({
+                        ...lessonForm,
+                        description: e.target.value,
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    rows="3"
+                    placeholder="Enter lesson description..."
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Audio Files (Optional)
+                  </label>
+                  <div className="flex items-center justify-center w-full">
+                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
+                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                        <FiUpload className="w-8 h-8 mb-3 text-gray-400" />
+                        <p className="mb-2 text-sm text-gray-500">
+                          <span className="font-semibold">Click to upload</span>{" "}
+                          or drag and drop
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          MP3, WAV, OGG, M4A, AAC (MAX. 50MB)
+                        </p>
+                      </div>
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept="audio/*"
+                        multiple
+                        onChange={handleAudioFileChange}
+                      />
+                    </label>
+                  </div>
+                  {audioFiles.length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-sm text-gray-600">
+                        {audioFiles.length} file(s) selected
+                      </p>
+                      <ul className="text-xs text-gray-500 mt-1">
+                        {audioFiles.map((file, index) => (
+                          <li key={index}>{file.name}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowAddLessonModal(false);
+                    setLessonForm({
+                      title: "",
+                      description: "",
+                      orderNumber: "",
+                      audioFiles: [],
+                    });
+                    setAudioFiles([]);
+                  }}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddLesson}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  Add Lesson
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Add Test Modal */}
+        {showAddTestModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold">
+                  Add Test to {selectedLessonForTest?.title}
+                </h2>
+                <button
+                  onClick={() => {
+                    setShowAddTestModal(false);
+                    setTestForm({
+                      title: "",
+                      categoryId: "",
+                      difficulty: "medium",
+                      type: "speech",
+                    });
+                  }}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <FiX size={24} />
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Test Title *
+                  </label>
+                  <input
+                    type="text"
+                    value={testForm.title}
+                    onChange={(e) =>
+                      setTestForm({ ...testForm, title: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter test title"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Category *
+                  </label>
+                  <select
+                    value={testForm.categoryId}
+                    onChange={(e) =>
+                      setTestForm({ ...testForm, categoryId: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select a category</option>
+                    {categories.map((category) => (
+                      <option key={category._id} value={category._id}>
+                        {category.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Test Type *
+                  </label>
+                  <div className="flex gap-4">
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        value="speech"
+                        checked={testForm.type === "speech"}
+                        onChange={(e) =>
+                          setTestForm({ ...testForm, type: e.target.value })
+                        }
+                        className="mr-2"
+                      />
+                      <FiMic className="mr-1" />
+                      Speech
+                    </label>
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        value="listening"
+                        checked={testForm.type === "listening"}
+                        onChange={(e) =>
+                          setTestForm({ ...testForm, type: e.target.value })
+                        }
+                        className="mr-2"
+                      />
+                      <FiHeadphones className="mr-1" />
+                      Listening
+                    </label>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Difficulty
+                  </label>
+                  <select
+                    value={testForm.difficulty}
+                    onChange={(e) =>
+                      setTestForm({ ...testForm, difficulty: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="easy">Easy</option>
+                    <option value="medium">Medium</option>
+                    <option value="hard">Hard</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowAddTestModal(false);
+                    setTestForm({
+                      title: "",
+                      categoryId: "",
+                      difficulty: "medium",
+                      type: "speech",
+                    });
+                  }}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddTest}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Add Test
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Dictionary Modal */}
+        {selectedLesson && (
+          <DictionaryModal
+            isOpen={showDictionaryModal}
+            onClose={() => {
+              setShowDictionaryModal(false);
+              setSelectedLesson(null);
+              grades.forEach((grade) => fetchLessons(grade._id));
+            }}
+            lessonId={selectedLesson._id}
+            lessonTitle={selectedLesson.title}
+            onSuccess={() => {
+              grades.forEach((grade) => fetchLessons(grade._id));
+            }}
           />
         )}
       </div>
     </AdminLayout>
   );
 };
-
-// Grade Accordion Component
-const GradeAccordion = ({
-  grade,
-  isExpanded,
-  onToggle,
-  lessons,
-  tests,
-  onEditGrade,
-  onDeleteGrade,
-  onAddLesson,
-  onEditLesson,
-  onDeleteLesson,
-  onAddTest,
-  onEditTest,
-  onDeleteTest,
-}) => {
-  return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-      {/* Grade Header */}
-      <div className="p-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={onToggle}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              {isExpanded ? <FiChevronDown /> : <FiChevronRight />}
-            </button>
-            <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
-              <FiBook className="text-red-600 text-xl" />
-            </div>
-            <div>
-              <h3 className="text-xl font-semibold text-gray-900">
-                {grade.name}
-              </h3>
-              {grade.description && (
-                <p className="text-gray-600 text-sm">{grade.description}</p>
-              )}
-              <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
-                <span>{lessons.length} lessons</span>
-                <span>
-                  {
-                    Object.values(tests)
-                      .flat()
-                      .filter((t) => t.gradeId === grade._id).length
-                  }{" "}
-                  tests
-                </span>
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => onAddLesson()}
-              className="px-3 py-1 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors flex items-center gap-1"
-            >
-              <FiPlus size={14} /> Lesson
-            </button>
-            <button
-              onClick={onEditGrade}
-              className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-            >
-              <FiEdit2 size={16} />
-            </button>
-            <button
-              onClick={onDeleteGrade}
-              className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-            >
-              <FiTrash2 size={16} />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Expanded Content */}
-      {isExpanded && (
-        <div className="border-t border-gray-200 p-6">
-          {lessons.length > 0 ? (
-            <div className="space-y-4">
-              {lessons.map((lesson) => (
-                <LessonItem
-                  key={lesson._id}
-                  lesson={lesson}
-                  tests={tests[lesson._id] || []}
-                  onEdit={() => onEditLesson(lesson)}
-                  onDelete={() => onDeleteLesson(lesson._id)}
-                  onAddTest={() => onAddTest(lesson)}
-                  onEditTest={(test) => onEditTest(lesson, test)}
-                  onDeleteTest={onDeleteTest}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8 text-gray-500">
-              <FiBook className="mx-auto text-4xl mb-2 opacity-50" />
-              <p>No lessons yet. Create your first lesson!</p>
-              <button
-                onClick={() => onAddLesson()}
-                className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Add Lesson
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Lesson Item Component
-const LessonItem = ({
-  lesson,
-  tests,
-  onEdit,
-  onDelete,
-  onAddTest,
-  onEditTest,
-  onDeleteTest,
-}) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-
-  return (
-    <div className="bg-gray-50 rounded-lg p-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="p-1 hover:bg-gray-200 rounded transition-colors"
-          >
-            {isExpanded ? (
-              <FiChevronDown size={16} />
-            ) : (
-              <FiChevronRight size={16} />
-            )}
-          </button>
-          <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-            <span className="text-green-600 font-bold text-sm">
-              {lesson.orderNumber}
-            </span>
-          </div>
-          <div>
-            <h4 className="font-medium text-gray-900">{lesson.title}</h4>
-            <div className="flex items-center space-x-4 text-sm text-gray-500">
-              <span>{tests.length} tests</span>
-              {lesson.audioFiles?.length > 0 && (
-                <span className="flex items-center gap-1">
-                  <FiMusic size={12} /> {lesson.audioFiles.length}
-                </span>
-              )}
-              {lesson.dictionaries?.length > 0 && (
-                <span>{lesson.dictionaries.length} words</span>
-              )}
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={onAddTest}
-            className="px-2 py-1 bg-purple-100 text-purple-600 rounded text-xs hover:bg-purple-200 transition-colors flex items-center gap-1"
-          >
-            <FiPlus size={12} /> Test
-          </button>
-          <button
-            onClick={onEdit}
-            className="p-1 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-          >
-            <FiEdit2 size={14} />
-          </button>
-          <button
-            onClick={onDelete}
-            className="p-1 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-          >
-            <FiTrash2 size={14} />
-          </button>
-        </div>
-      </div>
-
-      {isExpanded && (
-        <div className="mt-4 ml-8 space-y-2">
-          {tests.length > 0 ? (
-            tests.map((test) => (
-              <div
-                key={test._id}
-                className="bg-white rounded p-3 flex items-center justify-between"
-              >
-                <div className="flex items-center space-x-3">
-                  <FiPaperclip className="text-purple-600" />
-                  <div>
-                    <span className="font-medium text-sm">{test.title}</span>
-                    <div className="text-xs text-gray-500 flex items-center gap-2">
-                      <span>{test.category.title}</span>
-                      <span className="px-1 py-0.5 bg-gray-100 rounded">
-                        {test.difficulty}
-                      </span>
-                      {test.type && (
-                        <span className="px-1 py-0.5 bg-blue-100 text-blue-600 rounded">
-                          {test.type}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-1">
-                  <button
-                    onClick={() => onEditTest(test)}
-                    className="p-1 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                  >
-                    <FiEdit2 size={12} />
-                  </button>
-                  <button
-                    onClick={() => onDeleteTest(test._id)}
-                    className="p-1 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                  >
-                    <FiTrash2 size={12} />
-                  </button>
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="text-center py-4 text-gray-400 text-sm">
-              No tests yet
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Modal Components
-const GradeModal = ({ grade, formData, setFormData, onSubmit, onClose }) => (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-    <div className="bg-white rounded-xl max-w-md w-full">
-      <div className="p-6 border-b border-gray-200">
-        <h2 className="text-xl font-bold text-gray-900">
-          {grade ? "Edit Grade" : "Create Grade"}
-        </h2>
-      </div>
-      <form onSubmit={onSubmit} className="p-6 space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Grade Name *
-          </label>
-          <input
-            type="text"
-            value={formData.name}
-            onChange={(e) =>
-              setFormData((prev) => ({ ...prev, name: e.target.value }))
-            }
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-            placeholder="e.g., 8-sinf, 9-sinf"
-            required
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Description
-          </label>
-          <textarea
-            value={formData.description}
-            onChange={(e) =>
-              setFormData((prev) => ({ ...prev, description: e.target.value }))
-            }
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-            rows={3}
-          />
-        </div>
-        <div className="flex space-x-4 pt-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
-          >
-            {grade ? "Update" : "Create"}
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-);
-
-const LessonModal = ({
-  lesson,
-  formData,
-  setFormData,
-  selectedGrade,
-  onSubmit,
-  onClose,
-}) => (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-    <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-      <div className="p-6 border-b border-gray-200">
-        <h2 className="text-xl font-bold text-gray-900">
-          {lesson ? "Edit Lesson" : "Create Lesson"} - {selectedGrade?.name}
-        </h2>
-      </div>
-      <form onSubmit={onSubmit} className="p-6 space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Title *
-            </label>
-            <input
-              type="text"
-              value={formData.title}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, title: e.target.value }))
-              }
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Order Number
-            </label>
-            <input
-              type="number"
-              value={formData.orderNumber}
-              onChange={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  orderNumber: e.target.value,
-                }))
-              }
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-              min="1"
-            />
-          </div>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Description
-          </label>
-          <textarea
-            value={formData.description}
-            onChange={(e) =>
-              setFormData((prev) => ({ ...prev, description: e.target.value }))
-            }
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-            rows={3}
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Audio Files
-          </label>
-          <input
-            type="file"
-            onChange={(e) =>
-              setFormData((prev) => ({
-                ...prev,
-                audioFiles: Array.from(e.target.files),
-              }))
-            }
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-            accept="audio/*"
-            multiple
-          />
-          <p className="text-xs text-gray-500 mt-1">
-            Supported formats: MP3, WAV, OGG, M4A, AAC (Max 50MB per file)
-          </p>
-        </div>
-        <div className="flex space-x-4 pt-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
-          >
-            {lesson ? "Update" : "Create"}
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-);
-
-const TestModal = ({
-  test,
-  formData,
-  setFormData,
-  categories,
-  selectedGrade,
-  selectedLesson,
-  onSubmit,
-  onClose,
-}) => (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-    <div className="bg-white rounded-xl max-w-md w-full">
-      <div className="p-6 border-b border-gray-200">
-        <h2 className="text-xl font-bold text-gray-900">
-          {test ? "Edit Test" : "Create Test"}
-        </h2>
-        <p className="text-sm text-gray-600 mt-1">
-          {selectedGrade?.name} - {selectedLesson?.title}
-        </p>
-      </div>
-      <form onSubmit={onSubmit} className="p-6 space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Test Title *
-          </label>
-          <input
-            type="text"
-            value={formData.title}
-            onChange={(e) =>
-              setFormData((prev) => ({ ...prev, title: e.target.value }))
-            }
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-            required
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Test Type *
-          </label>
-          <select
-            value={formData.type}
-            onChange={(e) =>
-              setFormData((prev) => ({ ...prev, type: e.target.value }))
-            }
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-          >
-            <option value="speech">Speech Test</option>
-            <option value="listening">Listening Test</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Category *
-          </label>
-          <select
-            value={formData.categoryId}
-            onChange={(e) =>
-              setFormData((prev) => ({ ...prev, categoryId: e.target.value }))
-            }
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-            required
-          >
-            <option value="">Select category</option>
-            {categories.map((category) => (
-              <option key={category._id} value={category._id}>
-                {category.title}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Difficulty
-          </label>
-          <select
-            value={formData.difficulty}
-            onChange={(e) =>
-              setFormData((prev) => ({ ...prev, difficulty: e.target.value }))
-            }
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-          >
-            <option value="easy">Easy</option>
-            <option value="medium">Medium</option>
-            <option value="hard">Hard</option>
-          </select>
-        </div>
-        <div className="flex space-x-4 pt-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
-          >
-            {test ? "Update" : "Create"}
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-);
 
 export default AdminGrades;

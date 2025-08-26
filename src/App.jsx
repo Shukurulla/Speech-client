@@ -50,6 +50,7 @@ function App() {
       UserService.profile(dispatch).then(() => {
         // Auto-redirect admin to admin dashboard
         const userData = user?.user || user;
+        console.log(userData);
         if (
           userData?.role === "admin" &&
           !location.pathname.startsWith("/admin")
