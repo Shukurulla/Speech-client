@@ -1,4 +1,3 @@
-// src/components/admin/AdminLayout.jsx
 import React, { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -14,6 +13,7 @@ import {
   FiChevronDown,
   FiMic,
   FiClipboard,
+  FiHeadphones,
 } from "react-icons/fi";
 import { useDispatch } from "react-redux";
 
@@ -26,7 +26,7 @@ const AdminLayout = ({ children }) => {
 
   const menuItems = [
     {
-      path: "/admin/dashboard",
+      path: "/admin",
       label: "Dashboard",
       icon: FiHome,
     },
@@ -41,24 +41,21 @@ const AdminLayout = ({ children }) => {
       icon: FiBook,
     },
     {
-      path: "/admin/tests",
-      label: "Regular Tests",
-      icon: FiBookOpen,
-      subItems: [
-        {
-          path: "/admin/tests",
-          label: "Speaking Tests",
-        },
-        {
-          path: "/admin/tests/listening/create",
-          label: "Listening Tests",
-        },
-      ],
+      path: "/admin/speaking-tests",
+      label: "Speaking Tests",
+      icon: FiMic,
+      description: "Manage speaking tests",
+    },
+    {
+      path: "/admin/listening-tests",
+      label: "Listening Tests",
+      icon: FiHeadphones,
+      description: "Manage listening tests",
     },
     {
       path: "/admin/topic-tests",
       label: "Topic Tests",
-      icon: FiMic,
+      icon: FiBookOpen,
       description: "Every 5 lessons",
     },
     {
@@ -84,25 +81,11 @@ const AdminLayout = ({ children }) => {
     navigate("/login");
   };
 
-  const toggleSubmenu = (path) => {
-    setExpandedMenus((prev) => ({
-      ...prev,
-      [path]: !prev[path],
-    }));
-  };
-
   const isActive = (path) => {
-    if (path === "/admin/dashboard" && location.pathname === "/admin") {
+    if (path === "/admin" && location.pathname === "/admin") {
       return true;
     }
     return location.pathname === path;
-  };
-
-  const isParentActive = (item) => {
-    if (item.subItems) {
-      return item.subItems.some((sub) => location.pathname === sub.path);
-    }
-    return isActive(item.path);
   };
 
   return (
@@ -121,7 +104,7 @@ const AdminLayout = ({ children }) => {
 
       {/* Sidebar */}
       <aside
-        className={`fixed top-0 left-0 h-full md:w-64 sm:w-full bg-white shadow-lg transform transition-transform duration-300 z-40 ${
+        className={`fixed top-0 left-0 h-full md:w-80 sm:w-full bg-white shadow-lg transform transition-transform duration-300 z-40 ${
           isSidebarOpen ? "translate-x-0" : "-translate-x-full"
         } lg:translate-x-0`}
       >
@@ -136,66 +119,24 @@ const AdminLayout = ({ children }) => {
           <ul className="space-y-2 h-[60vh] overflow-y-scroll">
             {menuItems.map((item) => (
               <li key={item.path}>
-                {item.subItems ? (
-                  <div>
-                    <button
-                      onClick={() => toggleSubmenu(item.path)}
-                      className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-colors ${
-                        isParentActive(item)
-                          ? "bg-blue-50 text-blue-600"
-                          : "text-gray-700 hover:bg-gray-100"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <item.icon size={20} />
-                        <span className="font-medium">{item.label}</span>
-                      </div>
-                      <FiChevronDown
-                        className={`transition-transform ${
-                          expandedMenus[item.path] ? "rotate-180" : ""
-                        }`}
-                        size={16}
-                      />
-                    </button>
-                    {expandedMenus[item.path] && (
-                      <ul className="mt-2 ml-9 space-y-1">
-                        {item.subItems.map((subItem) => (
-                          <li key={subItem.path}>
-                            <Link
-                              to={subItem.path}
-                              className={`block px-4 py-2 rounded-lg text-sm transition-colors ${
-                                isActive(subItem.path)
-                                  ? "bg-blue-50 text-blue-600"
-                                  : "text-gray-600 hover:bg-gray-100"
-                              }`}
-                            >
-                              {subItem.label}
-                            </Link>
-                          </li>
-                        ))}
-                      </ul>
+                <Link
+                  to={item.path}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                    isActive(item.path)
+                      ? "bg-blue-50 text-blue-600"
+                      : "text-gray-700 hover:bg-gray-100"
+                  }`}
+                >
+                  <item.icon size={20} />
+                  <div className="flex-1">
+                    <span className="font-medium">{item.label}</span>
+                    {item.description && (
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {item.description}
+                      </p>
                     )}
                   </div>
-                ) : (
-                  <Link
-                    to={item.path}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                      isActive(item.path)
-                        ? "bg-blue-50 text-blue-600"
-                        : "text-gray-700 hover:bg-gray-100"
-                    }`}
-                  >
-                    <item.icon size={20} />
-                    <div className="flex-1">
-                      <span className="font-medium">{item.label}</span>
-                      {item.description && (
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          {item.description}
-                        </p>
-                      )}
-                    </div>
-                  </Link>
-                )}
+                </Link>
               </li>
             ))}
           </ul>
@@ -221,7 +162,7 @@ const AdminLayout = ({ children }) => {
       )}
 
       {/* Main Content */}
-      <main className="lg:ml-64 min-h-screen">
+      <main className="lg:ml-80 min-h-screen">
         <div className="p-6">{children}</div>
       </main>
     </div>

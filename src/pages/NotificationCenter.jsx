@@ -9,14 +9,18 @@ import {
   FiInfo,
   FiChevronRight,
   FiTrash2,
+  FiClock,
+  FiTrendingUp,
 } from "react-icons/fi";
+import axios from "../service/api";
+import { toast } from "react-hot-toast";
 
 const NotificationCenter = () => {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [isOpen, setIsOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [selectedNotification, setSelectedNotification] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [filter, setFilter] = useState("all"); // all, unread, ai_feedback
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -24,34 +28,41 @@ const NotificationCenter = () => {
     // Poll for new notifications every 30 seconds
     const interval = setInterval(fetchNotifications, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [filter]);
 
   const fetchNotifications = async () => {
     try {
-      const response = await fetch("/api/notifications", {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("speech-token")}`,
-        },
-      });
-      const data = await response.json();
+      setIsLoading(true);
+      let endpoint = "/notifications";
+      if (filter === "unread") {
+        endpoint += "?unreadOnly=true";
+      }
+
+      const { data } = await axios.get(endpoint);
 
       if (data.status === "success") {
-        setNotifications(data.data.notifications);
+        let filteredNotifications = data.data.notifications;
+
+        if (filter === "ai_feedback") {
+          filteredNotifications = filteredNotifications.filter(
+            (n) => n.type === "ai_feedback"
+          );
+        }
+
+        setNotifications(filteredNotifications);
         setUnreadCount(data.data.unreadCount);
       }
     } catch (error) {
       console.error("Error fetching notifications:", error);
+      toast.error("Failed to load notifications");
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const markAsRead = async (notificationId) => {
     try {
-      await fetch(`/api/notifications/${notificationId}/read`, {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("speech-token")}`,
-        },
-      });
+      await axios.put(`/notifications/${notificationId}/read`);
 
       setNotifications((prev) =>
         prev.map((n) => (n._id === notificationId ? { ...n, read: true } : n))
@@ -64,35 +75,28 @@ const NotificationCenter = () => {
 
   const markAllAsRead = async () => {
     try {
-      await fetch("/api/notifications/read-all", {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("speech-token")}`,
-        },
-      });
-
+      await axios.put("/notifications/read-all");
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
       setUnreadCount(0);
+      toast.success("All notifications marked as read");
     } catch (error) {
-      console.error("Error marking all as read:", error);
+      toast.error("Failed to mark all as read");
     }
   };
 
   const deleteNotification = async (notificationId) => {
     try {
-      await fetch(`/api/notifications/${notificationId}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("speech-token")}`,
-        },
-      });
-
+      await axios.delete(`/notifications/${notificationId}`);
       setNotifications((prev) => prev.filter((n) => n._id !== notificationId));
-      if (!notifications.find((n) => n._id === notificationId)?.read) {
+
+      const notification = notifications.find((n) => n._id === notificationId);
+      if (!notification?.read) {
         setUnreadCount((prev) => Math.max(0, prev - 1));
       }
+
+      toast.success("Notification deleted");
     } catch (error) {
-      console.error("Error deleting notification:", error);
+      toast.error("Failed to delete notification");
     }
   };
 
@@ -102,39 +106,33 @@ const NotificationCenter = () => {
       await markAsRead(notification._id);
     }
 
-    // Get details and redirect if needed
-    try {
-      const response = await fetch(
-        `/api/notifications/${notification._id}/details`,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("speech-token")}`,
-          },
-        }
-      );
-      const data = await response.json();
-
-      if (data.status === "success" && data.data.redirectUrl) {
-        setIsOpen(false);
-        navigate(data.data.redirectUrl);
-      } else {
-        setSelectedNotification(data.data.test || notification);
-      }
-    } catch (error) {
-      console.error("Error getting notification details:", error);
+    // Handle navigation based on notification type
+    if (notification.type === "ai_feedback" && notification.data?.testId) {
+      navigate(`/topic-test/result/${notification.data.testId}`);
+    } else if (notification.type === "mock_test" && notification.data?.testId) {
+      navigate(`/mock-test/result/${notification.data.testId}`);
+    } else if (
+      notification.type === "test_complete" &&
+      notification.data?.resultId
+    ) {
+      navigate(`/results/${notification.data.resultId}`);
+    } else {
+      setSelectedNotification(notification);
     }
   };
 
   const getNotificationIcon = (type) => {
     switch (type) {
       case "ai_feedback":
-        return <FiMessageCircle className="text-purple-600" />;
+        return <FiMessageCircle className="text-purple-600" size={20} />;
       case "test_complete":
-        return <FiCheck className="text-green-600" />;
+        return <FiCheck className="text-green-600" size={20} />;
       case "achievement":
-        return <FiAward className="text-yellow-600" />;
+        return <FiAward className="text-yellow-600" size={20} />;
+      case "mock_test":
+        return <FiTrendingUp className="text-blue-600" size={20} />;
       default:
-        return <FiInfo className="text-blue-600" />;
+        return <FiInfo className="text-blue-600" size={20} />;
     }
   };
 
@@ -154,133 +152,166 @@ const NotificationCenter = () => {
     return notifDate.toLocaleDateString();
   };
 
+  const getScoreColor = (score) => {
+    if (score >= 90) return "text-green-600";
+    if (score >= 80) return "text-blue-600";
+    if (score >= 70) return "text-yellow-600";
+    if (score >= 60) return "text-orange-600";
+    return "text-red-600";
+  };
+
+  if (isLoading && notifications.length === 0) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
   return (
-    <>
-      {/* Notification Bell Icon */}
-      <div className="relative">
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className="relative p-2 text-gray-600 hover:text-gray-900 transition-colors"
-        >
-          <FiBell size={24} />
-          {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
-              {unreadCount > 9 ? "9+" : unreadCount}
-            </span>
-          )}
-        </button>
-
-        {/* Notification Dropdown */}
-        {isOpen && (
-          <div className="absolute right-0 mt-2 w-96 bg-white rounded-xl shadow-2xl border border-gray-200 z-50">
-            {/* Header */}
-            <div className="p-4 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">
-                  Notifications
-                </h3>
-                <div className="flex items-center space-x-2">
-                  {unreadCount > 0 && (
-                    <button
-                      onClick={markAllAsRead}
-                      className="text-sm text-blue-600 hover:text-blue-700"
-                    >
-                      Mark all as read
-                    </button>
-                  )}
-                  <button
-                    onClick={() => setIsOpen(false)}
-                    className="text-gray-400 hover:text-gray-600"
-                  >
-                    <FiX size={20} />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Notifications List */}
-            <div className="max-h-96 overflow-y-auto">
-              {notifications.length === 0 ? (
-                <div className="p-8 text-center">
-                  <div className="text-gray-400 mb-2">
-                    <FiBell size={48} className="mx-auto" />
-                  </div>
-                  <p className="text-gray-500">No notifications yet</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-gray-100">
-                  {notifications.map((notification) => (
-                    <div
-                      key={notification._id}
-                      className={`p-4 hover:bg-gray-50 cursor-pointer transition-colors ${
-                        !notification.read ? "bg-blue-50" : ""
-                      }`}
-                      onClick={() => handleNotificationClick(notification)}
-                    >
-                      <div className="flex items-start space-x-3">
-                        <div className="mt-1">
-                          {getNotificationIcon(notification.type)}
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <p className="font-medium text-gray-900 text-sm">
-                                {notification.title}
-                              </p>
-                              <p className="text-sm text-gray-600 mt-1">
-                                {notification.message}
-                              </p>
-                              <p className="text-xs text-gray-400 mt-2">
-                                {formatTime(notification.createdAt)}
-                              </p>
-                            </div>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                deleteNotification(notification._id);
-                              }}
-                              className="ml-2 text-gray-400 hover:text-red-600"
-                            >
-                              <FiTrash2 size={14} />
-                            </button>
-                          </div>
-                        </div>
-                        {!notification.read && (
-                          <div className="w-2 h-2 bg-blue-600 rounded-full mt-2"></div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Footer */}
-            {notifications.length > 0 && (
-              <div className="p-3 border-t border-gray-200">
-                <button
-                  onClick={() => {
-                    setIsOpen(false);
-                    navigate("/notifications");
-                  }}
-                  className="w-full text-center text-sm text-blue-600 hover:text-blue-700 font-medium"
-                >
-                  View all notifications
-                </button>
-              </div>
-            )}
+    <div className="max-w-5xl mx-auto">
+      {/* Header */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              Notifications
+            </h1>
+            <p className="text-gray-600">
+              Stay updated with your learning progress
+            </p>
           </div>
-        )}
+          {unreadCount > 0 && (
+            <div className="flex items-center gap-4">
+              <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+                {unreadCount} unread
+              </span>
+              <button
+                onClick={markAllAsRead}
+                className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+              >
+                Mark all as read
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Filters */}
+        <div className="flex gap-2">
+          {["all", "unread", "ai_feedback"].map((filterType) => (
+            <button
+              key={filterType}
+              onClick={() => setFilter(filterType)}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                filter === filterType
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+            >
+              {filterType === "ai_feedback"
+                ? "AI Feedback"
+                : filterType.charAt(0).toUpperCase() + filterType.slice(1)}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Selected Notification Modal (for AI Feedback) */}
+      {/* Notifications List */}
+      {notifications.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+          <div className="text-gray-400 mb-4">
+            <FiBell size={48} className="mx-auto" />
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            No notifications
+          </h3>
+          <p className="text-gray-500">
+            {filter === "unread"
+              ? "You're all caught up!"
+              : filter === "ai_feedback"
+              ? "No AI feedback yet"
+              : "When you receive notifications, they'll appear here"}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {notifications.map((notification) => (
+            <div
+              key={notification._id}
+              className={`bg-white rounded-xl border ${
+                !notification.read
+                  ? "border-blue-200 bg-blue-50"
+                  : "border-gray-200"
+              } p-6 hover:shadow-md transition-all cursor-pointer`}
+              onClick={() => handleNotificationClick(notification)}
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex items-start gap-4 flex-1">
+                  <div className="mt-1">
+                    {getNotificationIcon(notification.type)}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-start justify-between mb-2">
+                      <h3 className="font-semibold text-gray-900">
+                        {notification.title}
+                      </h3>
+                      {!notification.read && (
+                        <span className="w-2 h-2 bg-blue-600 rounded-full ml-2"></span>
+                      )}
+                    </div>
+                    <p className="text-gray-600 mb-3">{notification.message}</p>
+
+                    {/* Additional Info for AI Feedback */}
+                    {notification.type === "ai_feedback" &&
+                      notification.data?.score && (
+                        <div className="flex items-center gap-4 mt-3">
+                          <span
+                            className={`text-2xl font-bold ${getScoreColor(
+                              notification.data.score
+                            )}`}
+                          >
+                            {notification.data.score}%
+                          </span>
+                          <span className="text-sm text-gray-500">
+                            Overall Score
+                          </span>
+                        </div>
+                      )}
+
+                    <div className="flex items-center justify-between mt-4">
+                      <p className="text-xs text-gray-400 flex items-center">
+                        <FiClock className="mr-1" size={12} />
+                        {formatTime(notification.createdAt)}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteNotification(notification._id);
+                          }}
+                          className="text-gray-400 hover:text-red-600 p-1"
+                        >
+                          <FiTrash2 size={16} />
+                        </button>
+                        <FiChevronRight className="text-gray-400" size={16} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Selected Notification Modal */}
       {selectedNotification && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-bold text-gray-900">
-                  AI Feedback Details
+                  Notification Details
                 </h2>
                 <button
                   onClick={() => setSelectedNotification(null)}
@@ -292,88 +323,33 @@ const NotificationCenter = () => {
             </div>
 
             <div className="p-6">
-              {/* Topic Information */}
-              <div className="mb-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  {selectedNotification.topic}
-                </h3>
-                <p className="text-gray-600">
-                  {selectedNotification.topicDescription}
-                </p>
+              <div className="mb-4">
+                {getNotificationIcon(selectedNotification.type)}
               </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                {selectedNotification.title}
+              </h3>
+              <p className="text-gray-600 mb-4">
+                {selectedNotification.message}
+              </p>
 
-              {/* Scores */}
-              {selectedNotification.analysis && (
-                <>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                    <div className="bg-purple-50 rounded-lg p-3 text-center">
-                      <div className="text-2xl font-bold text-purple-600">
-                        {selectedNotification.analysis.relevanceScore}%
-                      </div>
-                      <div className="text-xs text-gray-600">Relevance</div>
-                    </div>
-                    <div className="bg-blue-50 rounded-lg p-3 text-center">
-                      <div className="text-2xl font-bold text-blue-600">
-                        {selectedNotification.analysis.grammarScore}%
-                      </div>
-                      <div className="text-xs text-gray-600">Grammar</div>
-                    </div>
-                    <div className="bg-green-50 rounded-lg p-3 text-center">
-                      <div className="text-2xl font-bold text-green-600">
-                        {selectedNotification.analysis.vocabularyScore}%
-                      </div>
-                      <div className="text-xs text-gray-600">Vocabulary</div>
-                    </div>
-                    <div className="bg-orange-50 rounded-lg p-3 text-center">
-                      <div className="text-2xl font-bold text-orange-600">
-                        {selectedNotification.analysis.fluencyScore}%
-                      </div>
-                      <div className="text-xs text-gray-600">Fluency</div>
-                    </div>
-                  </div>
-
-                  {/* Your Speech */}
-                  <div className="mb-6">
-                    <h4 className="font-semibold text-gray-900 mb-2">
-                      Your Speech:
-                    </h4>
-                    <div className="bg-gray-50 rounded-lg p-4">
-                      <p className="text-gray-700">
-                        {selectedNotification.userSpeech}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* AI Analysis */}
-                  <div className="mb-6">
-                    <h4 className="font-semibold text-gray-900 mb-2">
-                      AI Analysis:
-                    </h4>
-                    <div className="bg-blue-50 rounded-lg p-4">
-                      <p className="text-blue-800">
-                        {selectedNotification.analysis.detailedAnalysis}
-                      </p>
-                    </div>
-                  </div>
-                </>
+              {selectedNotification.data && (
+                <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                  <pre className="text-sm text-gray-700 whitespace-pre-wrap">
+                    {JSON.stringify(selectedNotification.data, null, 2)}
+                  </pre>
+                </div>
               )}
 
-              {/* Action Button */}
-              <button
-                onClick={() => {
-                  navigate(`/topic-test/${selectedNotification._id}`);
-                  setSelectedNotification(null);
-                }}
-                className="w-full py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 transition-colors flex items-center justify-center"
-              >
-                View Full Analysis
-                <FiChevronRight className="ml-2" />
-              </button>
+              <p className="text-sm text-gray-400">
+                Received:{" "}
+                {new Date(selectedNotification.createdAt).toLocaleString()}
+              </p>
             </div>
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 };
 

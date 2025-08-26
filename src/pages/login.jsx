@@ -10,9 +10,25 @@ const Login = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
-  const loginHandler = (e) => {
+  const loginHandler = async (e) => {
     e.preventDefault();
-    UserService.loginUser(dispatch, { email, password }, navigate);
+
+    try {
+      const response = await UserService.loginUser(
+        dispatch,
+        { email, password },
+        navigate
+      );
+
+      // Check if admin and redirect accordingly
+      if (response?.user?.role === "admin") {
+        navigate("/admin");
+      } else {
+        navigate("/");
+      }
+    } catch (error) {
+      console.error("Login error:", error);
+    }
   };
 
   return (
@@ -59,7 +75,7 @@ const Login = () => {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full  text-[#333]  px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all"
+                className="w-full text-[#333] px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition-all"
                 placeholder="Enter your password"
                 required
               />

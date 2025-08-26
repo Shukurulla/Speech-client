@@ -18,7 +18,13 @@ const UserService = {
         toast.success(data.message);
         dispatch(getUserSuccess(data));
         localStorage.setItem("speech-token", data.token);
-        navigate("/");
+
+        // Check if admin
+        if (data.user?.role === "admin") {
+          navigate("/admin");
+        } else {
+          navigate("/");
+        }
       } else {
         toast.error(data.message);
       }
@@ -28,6 +34,7 @@ const UserService = {
       dispatch(getUserFailure());
     }
   },
+
   async loginUser(dispatch, user, navigate) {
     dispatch(getUserStart());
     try {
@@ -36,8 +43,15 @@ const UserService = {
         toast.success(data.message);
         dispatch(getUserSuccess(data));
         localStorage.setItem("speech-token", data.token);
-        
-        navigate("/");
+
+        // Check if admin and redirect
+        if (data.user?.role === "admin") {
+          navigate("/admin");
+        } else {
+          navigate("/");
+        }
+
+        return data; // Return data for additional handling
       } else {
         toast.error(data.message);
       }
@@ -47,12 +61,14 @@ const UserService = {
       dispatch(getUserFailure());
     }
   },
+
   async profile(dispatch) {
     dispatch(getUserStart());
     try {
       const { data } = await axios.get("/user/profile");
       if (data.status == "success") {
         dispatch(getUserSuccess(data));
+        return data; // Return data for redirect checking
       }
     } catch (error) {
       console.log(error);

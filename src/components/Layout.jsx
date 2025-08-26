@@ -1,5 +1,4 @@
-// src/components/Layout.jsx - Updated version
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FiActivity,
@@ -8,13 +7,33 @@ import {
   FiSettings,
   FiVolume2,
   FiDatabase,
+  FiBell,
 } from "react-icons/fi";
 import { useLogoutModal } from "./LogoutModal";
+import axios from "../service/api";
 
 const ResponsiveLayout = ({ activePage, activeTab }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const navigate = useNavigate();
   const { openLogoutModal, LogoutModal } = useLogoutModal("student");
+
+  useEffect(() => {
+    fetchUnreadCount();
+    const interval = setInterval(fetchUnreadCount, 60000); // Check every minute
+    return () => clearInterval(interval);
+  }, []);
+
+  const fetchUnreadCount = async () => {
+    try {
+      const { data } = await axios.get("/notifications?unreadOnly=true");
+      if (data.status === "success") {
+        setUnreadCount(data.data.unreadCount);
+      }
+    } catch (error) {
+      console.error("Error fetching unread count:", error);
+    }
+  };
 
   const menuItems = [
     {
@@ -28,9 +47,15 @@ const ResponsiveLayout = ({ activePage, activeTab }) => {
       path: "/grades",
     },
     {
-      label: "Results", // New menu item
+      label: "Results",
       icon: <FiDatabase />,
       path: "/results",
+    },
+    {
+      label: "Notifications",
+      icon: <FiBell />,
+      path: "/notifications",
+      badge: unreadCount,
     },
     {
       label: "Settings",
@@ -124,14 +149,21 @@ const ResponsiveLayout = ({ activePage, activeTab }) => {
                     navigate(item.path);
                     setIsSidebarOpen(false);
                   }}
-                  className={`w-full flex items-center px-4 py-3 text-left rounded-lg transition-all duration-200 ${
+                  className={`w-full flex items-center justify-between px-4 py-3 text-left rounded-lg transition-all duration-200 ${
                     activeTab === item.label
                       ? "bg-blue-50 text-blue-700 border border-blue-200"
                       : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                   }`}
                 >
-                  <span className="text-xl mr-3">{item.icon}</span>
-                  <span className="font-medium">{item.label}</span>
+                  <div className="flex items-center">
+                    <span className="text-xl mr-3">{item.icon}</span>
+                    <span className="font-medium">{item.label}</span>
+                  </div>
+                  {item.badge > 0 && (
+                    <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full">
+                      {item.badge}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>

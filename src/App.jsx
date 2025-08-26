@@ -11,14 +11,14 @@ import LessonTests from "./pages/LessonTests";
 import TestQuestions from "./pages/TestQuestions.jsx";
 import UserService from "./service/user.service";
 import { useDispatch, useSelector } from "react-redux";
-import AdminListeningTestCreator from "./pages/admin/ListeningTestCreator";
 
 // Admin Components
 import AdminDashboard from "./pages/admin/Dashboard";
 import AdminStudents from "./pages/admin/Students";
 import AdminGrades from "./pages/admin/Grades";
 import AdminLessons from "./pages/admin/Lessons";
-import AdminTests from "./pages/admin/Tests";
+import AdminSpeakingTests from "./pages/admin/SpeakingTests";
+import AdminListeningTests from "./pages/admin/ListeningTests.jsx";
 import AdminResults from "./pages/admin/Results";
 import AdminTopicTests from "./pages/admin/TopicTests";
 import AdminMockTests from "./pages/admin/MockTests";
@@ -30,6 +30,7 @@ import TopicSpeaking from "./pages/TopicSpeaking";
 import TopicTestResult from "./pages/TopicTestResult";
 import MockTest from "./pages/MockTest";
 import MockTestResult from "./pages/MockTestResult";
+import NotificationCenter from "./pages/NotificationCenter";
 
 function App() {
   const navigate = useNavigate();
@@ -46,7 +47,16 @@ function App() {
     ) {
       navigate("/login");
     } else if (token) {
-      UserService.profile(dispatch);
+      UserService.profile(dispatch).then(() => {
+        // Auto-redirect admin to admin dashboard
+        const userData = user?.user || user;
+        if (
+          userData?.role === "admin" &&
+          !location.pathname.startsWith("/admin")
+        ) {
+          navigate("/admin");
+        }
+      });
     }
   }, [token, navigate, dispatch, location.pathname]);
 
@@ -105,14 +115,17 @@ function App() {
           <Route path="/admin/students" element={<AdminStudents />} />
           <Route path="/admin/grades" element={<AdminGrades />} />
           <Route path="/admin/lessons" element={<AdminLessons />} />
-          <Route path="/admin/tests" element={<AdminTests />} />
+          <Route
+            path="/admin/speaking-tests"
+            element={<AdminSpeakingTests />}
+          />
+          <Route
+            path="/admin/listening-tests"
+            element={<AdminListeningTests />}
+          />
           <Route path="/admin/topic-tests" element={<AdminTopicTests />} />
           <Route path="/admin/mock-tests" element={<AdminMockTests />} />
           <Route path="/admin/results" element={<AdminResults />} />
-          <Route
-            path="/admin/tests/listening/create"
-            element={<AdminListeningTestCreator />}
-          />
         </Routes>
       </>
     );
@@ -134,6 +147,17 @@ function App() {
           }
         />
 
+        {/* Notifications */}
+        <Route
+          path="/notifications"
+          element={
+            <ResponsiveLayout
+              activePage={<NotificationCenter />}
+              activeTab={"Notifications"}
+            />
+          }
+        />
+
         {/* Grade Lessons - Shows lessons for selected grade */}
         <Route path="/grade/:gradeId" element={<GradeLessons />} />
 
@@ -148,8 +172,9 @@ function App() {
 
         {/* Results Page */}
         <Route path="/results" element={<StudentResults />} />
+        <Route path="/results/:resultId" element={<StudentResults />} />
 
-        {/* Topic Speaking Test Routes - New */}
+        {/* Topic Speaking Test Routes */}
         <Route
           path="/topic-speaking/:gradeId/:lessonNumber"
           element={<TopicSpeaking />}
@@ -159,7 +184,7 @@ function App() {
           element={<TopicTestResult />}
         />
 
-        {/* Mock Test Routes - New */}
+        {/* Mock Test Routes */}
         <Route path="/mock-test/:gradeId" element={<MockTest />} />
         <Route
           path="/mock-test/result/:resultId"
