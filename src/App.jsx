@@ -17,7 +17,7 @@ import Notifications from "./pages/Notifications";
 // Admin Components
 import AdminDashboard from "./pages/admin/dashboard.jsx";
 import AdminStudents from "./pages/admin/Students";
-import AdminGrades from "./pages/admin/Grades";
+import AdminGrades from "./pages/admin/Grades.jsx";
 import AdminLessons from "./pages/admin/Lessons";
 import AdminSpeakingTests from "./pages/admin/SpeakingTests";
 import AdminListeningTests from "./pages/admin/ListeningTests.jsx";
@@ -26,7 +26,7 @@ import AdminTopicTests from "./pages/admin/TopicTests";
 import AdminMockTests from "./pages/admin/MockTests";
 
 // User Components
-import Grades from "./pages/Grades.jsx";
+import Grades from "./pages/grades.jsx";
 import StudentResults from "./pages/StudentResult.jsx";
 import TopicSpeaking from "./pages/TopicSpeaking";
 import TopicTestResult from "./pages/TopicTestResult";
