@@ -8,6 +8,7 @@ import {
   FiSend,
   FiRefreshCw,
   FiVolume2,
+  FiEdit3,
   FiPause,
   FiPlay,
 } from "react-icons/fi";
@@ -17,163 +18,38 @@ import { toast } from "react-hot-toast";
 const TopicSpeaking = () => {
   const { gradeId, lessonNumber } = useParams();
   const navigate = useNavigate();
-  const recognitionRef = useRef(null);
-  const finalTranscriptRef = useRef("");
   const [topicTest, setTopicTest] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
-  const [spokenText, setSpokenText] = useState("");
+  const [finalText, setFinalText] = useState("");
   const [interimText, setInterimText] = useState("");
   const [timeLeft, setTimeLeft] = useState(60);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [browserSupported, setBrowserSupported] = useState(true);
+  const [isManualMode, setIsManualMode] = useState(false); // Manual typing mode
   const timerRef = useRef(null);
-  const [isPaused, setIsPaused] = useState(false);
-  const [recordingStarted, setRecordingStarted] = useState(false);
-  const [microphoneStream, setMicrophoneStream] = useState(null);
 
-  console.log("GradeId:", gradeId);
-  console.log("LessonNumber:", lessonNumber);
+  // Speech recognition reference
+  const recognitionRef = useRef(null);
+  const SpeechRecognition =
+    window.SpeechRecognition || window.webkitSpeechRecognition;
 
   useEffect(() => {
-    // Check browser support
-    const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
-
-    if (!SpeechRecognition) {
-      setBrowserSupported(false);
-      toast.error("Your browser does not support speech recognition");
-      return;
-    }
-
-    // Initialize speech recognition
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = "en-US";
-    recognition.maxAlternatives = 1;
-
-    // Speech recognition event handlers
-    recognition.onstart = () => {
-      console.log("Speech recognition started");
-      finalTranscriptRef.current = spokenText || "";
-    };
-
-    recognition.onspeechstart = () => {
-      console.log("Speech detected");
-    };
-
-    recognition.onspeechend = () => {
-      console.log("Speech ended");
-    };
-
-    recognition.onresult = (event) => {
-      let interim = "";
-      let final = finalTranscriptRef.current;
-
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-
-        if (event.results[i].isFinal) {
-          final += transcript + " ";
-          finalTranscriptRef.current = final;
-        } else {
-          interim = transcript;
-        }
-      }
-
-      setSpokenText(final);
-      setInterimText(interim);
-    };
-
-    recognition.onerror = (event) => {
-      console.log("Speech recognition error:", event.error);
-
-      // Handle different error types
-      switch (event.error) {
-        case "no-speech":
-          // This is normal, user hasn't spoken yet
-          console.log("Waiting for speech...");
-          break;
-        case "aborted":
-          console.log("Recognition aborted");
-          break;
-        case "audio-capture":
-          toast.error("No microphone found. Please check your microphone.");
-          setIsRecording(false);
-          setRecordingStarted(false);
-          break;
-        case "not-allowed":
-          toast.error(
-            "Microphone access denied. Please allow microphone access and reload the page."
-          );
-          setIsRecording(false);
-          setRecordingStarted(false);
-          break;
-        case "network":
-          toast.error("Network error occurred. Please check your connection.");
-          break;
-        default:
-          console.log("Recognition error:", event.error);
-      }
-    };
-
-    recognition.onend = () => {
-      console.log(
-        "Recognition ended, isRecording:",
-        isRecording,
-        "isPaused:",
-        isPaused
-      );
-
-      // Only restart if we're still recording and not paused
-      if (isRecording && !isPaused) {
-        setTimeout(() => {
-          try {
-            if (recognitionRef.current && isRecording && !isPaused) {
-              recognitionRef.current.start();
-              console.log("Recognition restarted");
-            }
-          } catch (error) {
-            if (error.message && error.message.includes("already started")) {
-              console.log("Recognition already running");
-            } else {
-              console.error("Failed to restart recognition:", error);
-            }
-          }
-        }, 200);
-      }
-    };
-
-    recognitionRef.current = recognition;
-
-    // Fetch topic test data
     fetchTopicTest();
 
-    // Cleanup
     return () => {
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.abort();
-        } catch (e) {
-          console.log("Recognition cleanup:", e);
-        }
-      }
       if (timerRef.current) {
         clearInterval(timerRef.current);
       }
-      if (microphoneStream) {
-        microphoneStream.getTracks().forEach((track) => track.stop());
-      }
+      stopRecognition();
     };
-  }, [isRecording, isPaused]); // Add dependencies
+  }, []);
 
   useEffect(() => {
-    if (isRecording && !isPaused && timeLeft > 0) {
+    if (isRecording && timeLeft > 0) {
       timerRef.current = setInterval(() => {
         setTimeLeft((prev) => {
           if (prev <= 1) {
-            handleStop();
+            stopRecording();
             return 0;
           }
           return prev - 1;
@@ -190,204 +66,203 @@ const TopicSpeaking = () => {
         clearInterval(timerRef.current);
       }
     };
-  }, [isRecording, isPaused, timeLeft]);
+  }, [isRecording, timeLeft]);
 
   const fetchTopicTest = async () => {
     try {
-      console.log(
-        "Fetching topic test for:",
-        `/topic-test/grade/${gradeId}/lesson/${lessonNumber}`
-      );
       const { data } = await axios.get(
         `/topic-test/grade/${gradeId}/lesson/${lessonNumber}`
       );
-      console.log("Topic test data:", data);
 
       if (data.status === "success" && data.data) {
         setTopicTest(data.data);
         setTimeLeft(data.data.duration || 60);
       } else {
         toast.error("No topic test found for this lesson");
-        setTimeout(() => navigate(-1), 2000);
+        // Don't navigate immediately, give user time to see the message
+        setTimeout(() => {
+          navigate(`/lesson/${gradeId}/tests`, { replace: true });
+        }, 2000);
       }
     } catch (error) {
       console.error("Error fetching topic test:", error);
-      toast.error("Failed to load topic test");
-      setTimeout(() => navigate(-1), 2000);
+
+      // More specific error handling
+      if (error.response?.status === 404) {
+        toast.error("Topic test not available for this lesson");
+      } else {
+        toast.error("Failed to load topic test");
+      }
+
+      // Navigate back after delay
+      setTimeout(() => {
+        navigate(-1, { replace: true });
+      }, 2000);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleStart = async () => {
-    if (!browserSupported) {
-      toast.error("Speech recognition is not supported in your browser");
+  const speechToText = () => {
+    try {
+      if (!SpeechRecognition) {
+        toast.error("Speech recognition not supported in your browser");
+        return;
+      }
+
+      const recognition = new SpeechRecognition();
+      recognition.lang = "en-US";
+      recognition.interimResults = true;
+      recognition.continuous = true;
+
+      recognitionRef.current = recognition;
+
+      recognition.start();
+      console.log("Recognition started");
+
+      recognition.onresult = (event) => {
+        let finalTranscript = "";
+        let interimTranscript = "";
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript + " ";
+          } else {
+            interimTranscript += transcript;
+          }
+        }
+
+        if (finalTranscript) {
+          setFinalText((prev) => prev + " " + finalTranscript);
+        }
+
+        setInterimText(interimTranscript);
+      };
+
+      recognition.onspeechend = () => {
+        console.log("Speech ended, restarting...");
+        if (isRecording) {
+          speechToText();
+        }
+      };
+
+      recognition.onerror = (event) => {
+        console.log("Recognition error:", event.error);
+
+        if (event.error === "no-speech") {
+          if (isRecording) {
+            setTimeout(() => {
+              if (isRecording && recognitionRef.current) {
+                try {
+                  recognitionRef.current.start();
+                } catch (e) {
+                  speechToText();
+                }
+              }
+            }, 100);
+          }
+        } else if (event.error === "audio-capture") {
+          toast.error("No microphone found. Please check your microphone.");
+          stopRecording();
+        } else if (event.error === "not-allowed") {
+          toast.error("Microphone permission denied.");
+          stopRecording();
+        }
+      };
+
+      recognition.onend = () => {
+        console.log("Recognition ended");
+        if (isRecording) {
+          setTimeout(() => {
+            if (isRecording) {
+              speechToText();
+            }
+          }, 100);
+        }
+      };
+    } catch (error) {
+      console.error("Error in speechToText:", error);
+      toast.error("Failed to start speech recognition");
+    }
+  };
+
+  const startRecording = () => {
+    if (!SpeechRecognition) {
+      toast.error(
+        "Your browser doesn't support speech recognition. Please use Chrome or Edge."
+      );
       return;
     }
 
-    try {
-      // Request microphone permission
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          sampleRate: 44100,
-        },
-      });
+    setFinalText("");
+    setInterimText("");
+    setIsRecording(true);
+    setIsManualMode(false);
 
-      setMicrophoneStream(stream);
-      console.log("Microphone access granted");
+    speechToText();
 
-      // Reset states
-      setSpokenText("");
-      setInterimText("");
-      finalTranscriptRef.current = "";
-      setIsRecording(true);
-      setIsPaused(false);
-      setRecordingStarted(true);
-
-      // Start recognition
-      try {
-        if (recognitionRef.current) {
-          recognitionRef.current.start();
-          console.log("Recognition start command sent");
-          toast.success(
-            "Recording started. Speak clearly into your microphone."
-          );
-        }
-      } catch (error) {
-        if (error.message && error.message.includes("already started")) {
-          console.log(
-            "Recognition already running, stopping and restarting..."
-          );
-          recognitionRef.current.stop();
-          setTimeout(() => {
-            recognitionRef.current.start();
-            console.log("Recognition restarted");
-          }, 200);
-        } else {
-          console.error("Failed to start recognition:", error);
-          toast.error("Failed to start speech recognition");
-          setIsRecording(false);
-          setRecordingStarted(false);
-        }
-      }
-    } catch (error) {
-      console.error("Failed to access microphone:", error);
-
-      if (error.name === "NotAllowedError") {
-        toast.error(
-          "Microphone permission denied. Please allow microphone access in your browser settings."
-        );
-      } else if (error.name === "NotFoundError") {
-        toast.error(
-          "No microphone found. Please connect a microphone and try again."
-        );
-      } else {
-        toast.error("Failed to access microphone. Please check your settings.");
-      }
-
-      setIsRecording(false);
-      setRecordingStarted(false);
-    }
+    toast.success("Recording started. Start speaking!");
   };
 
-  const handleStop = () => {
-    console.log("Stopping recording...");
-    setIsRecording(false);
-    setIsPaused(false);
-
+  const stopRecognition = () => {
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
+        recognitionRef.current = null;
       } catch (e) {
-        console.log("Stop recognition error:", e);
+        console.log("Stop error:", e);
       }
-    }
-
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-    }
-
-    if (microphoneStream) {
-      microphoneStream.getTracks().forEach((track) => track.stop());
-      setMicrophoneStream(null);
-    }
-
-    // Save final text
-    if (interimText) {
-      setSpokenText((prev) => prev + " " + interimText);
-      setInterimText("");
     }
   };
 
-  const handlePause = () => {
-    if (isPaused) {
-      // Resume
-      setIsPaused(false);
+  const stopRecording = () => {
+    setIsRecording(false);
 
-      setTimeout(() => {
-        try {
-          if (recognitionRef.current) {
-            recognitionRef.current.start();
-            toast.success("Recording resumed");
-          }
-        } catch (error) {
-          if (error.message && error.message.includes("already started")) {
-            console.log("Recognition already running");
-          } else {
-            console.error("Failed to resume recognition:", error);
-          }
-        }
-      }, 200);
-    } else {
-      // Pause
-      setIsPaused(true);
-
-      try {
-        if (recognitionRef.current) {
-          recognitionRef.current.stop();
-          toast.success("Recording paused");
-        }
-      } catch (error) {
-        console.log("Error pausing recognition:", error);
-      }
-
-      // Save interim text when pausing
-      if (interimText) {
-        setSpokenText((prev) => prev + " " + interimText);
-        setInterimText("");
-        finalTranscriptRef.current = spokenText + " " + interimText;
-      }
+    if (interimText) {
+      setFinalText((prev) => prev + " " + interimText);
+      setInterimText("");
     }
+
+    stopRecognition();
+    console.log("Recording stopped");
   };
 
   const handleReset = () => {
-    handleStop();
-    setSpokenText("");
+    stopRecording();
+    setFinalText("");
     setInterimText("");
-    finalTranscriptRef.current = "";
     setTimeLeft(topicTest?.duration || 60);
-    setRecordingStarted(false);
-    toast.success("Recording reset");
+    setIsManualMode(false);
+    toast.success("Reset completed");
+  };
+
+  const handleManualMode = () => {
+    stopRecording();
+    setIsManualMode(true);
+    toast.info("Manual typing mode enabled. You can type your response.");
+  };
+
+  const handleTextChange = (e) => {
+    setFinalText(e.target.value);
   };
 
   const handleSubmit = async () => {
-    // Combine final and interim text
-    const fullText = (spokenText + " " + interimText).trim();
+    const fullText = (finalText + " " + interimText).trim();
 
     if (!fullText) {
-      toast.error("Please record your response first");
+      toast.error("Please record or type your response first");
       return;
     }
 
     const wordCount = fullText
       .split(/\s+/)
       .filter((word) => word.length > 0).length;
+
     if (wordCount < 20) {
       toast.error(
-        `Your response is too short. You have ${wordCount} words, but need at least 20 words.`
+        `Your response is too short. You have ${wordCount} words, need at least 20.`
       );
       return;
     }
@@ -419,8 +294,22 @@ const TopicSpeaking = () => {
   };
 
   const getWordCount = () => {
-    const fullText = (spokenText + " " + interimText).trim();
+    const fullText = (finalText + " " + interimText).trim();
     return fullText.split(/\s+/).filter((word) => word.length > 0).length;
+  };
+
+  const getDisplayText = () => {
+    if (isManualMode) {
+      return finalText;
+    }
+    return (
+      <>
+        {finalText}
+        {interimText && (
+          <span className="text-gray-500 italic"> {interimText}</span>
+        )}
+      </>
+    );
   };
 
   // Loading state
@@ -430,35 +319,6 @@ const TopicSpeaking = () => {
         activePage={
           <div className="flex items-center justify-center min-h-[600px]">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-          </div>
-        }
-        activeTab="Dashboard"
-      />
-    );
-  }
-
-  // Browser not supported
-  if (!browserSupported) {
-    return (
-      <ResponsiveLayout
-        activePage={
-          <div className="max-w-4xl mx-auto p-6">
-            <div className="bg-red-50 rounded-xl p-8 text-center">
-              <div className="text-red-600 text-6xl mb-4">⚠️</div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                Browser Not Supported
-              </h2>
-              <p className="text-gray-600 mb-4">
-                Your browser doesn't support speech recognition. Please use
-                Chrome, Edge, or Safari.
-              </p>
-              <button
-                onClick={() => navigate(-1)}
-                className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
-              >
-                Go Back
-              </button>
-            </div>
           </div>
         }
         activeTab="Dashboard"
@@ -530,104 +390,110 @@ const TopicSpeaking = () => {
               >
                 {getWordCount()}
               </div>
-              <p className="text-sm text-gray-600 mt-1">Words Spoken</p>
+              <p className="text-sm text-gray-600 mt-1">Words Spoken/Written</p>
             </div>
           </div>
 
           {/* Recording Controls */}
           <div className="mb-8">
             <div className="flex justify-center gap-3">
-              {!isRecording && !recordingStarted ? (
-                <button
-                  onClick={handleStart}
-                  className="px-8 py-4 bg-red-600 text-white rounded-full hover:bg-red-700 transition-all transform hover:scale-105 flex items-center gap-3 shadow-lg"
-                >
-                  <FiMic className="text-2xl" />
-                  <span className="font-semibold">Start Speaking</span>
-                </button>
+              {!isRecording && !isManualMode ? (
+                <>
+                  <button
+                    onClick={startRecording}
+                    className="px-6 py-3 bg-red-600 text-white rounded-full hover:bg-red-700 transition-all flex items-center gap-2 shadow-lg"
+                  >
+                    <FiMic className="text-xl" />
+                    <span className="font-semibold">Start Speaking</span>
+                  </button>
+                  <button
+                    onClick={handleManualMode}
+                    className="px-6 py-3 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-all flex items-center gap-2 shadow-lg"
+                  >
+                    <FiEdit3 className="text-xl" />
+                    <span className="font-semibold">Type Instead</span>
+                  </button>
+                </>
               ) : isRecording ? (
-                <>
-                  <button
-                    onClick={handlePause}
-                    className="px-6 py-3 bg-yellow-500 text-white rounded-full hover:bg-yellow-600 flex items-center gap-2"
-                  >
-                    {isPaused ? <FiPlay /> : <FiPause />}
-                    {isPaused ? "Resume" : "Pause"}
-                  </button>
-                  <button
-                    onClick={handleStop}
-                    className="px-6 py-3 bg-gray-600 text-white rounded-full hover:bg-gray-700 flex items-center gap-2"
-                  >
-                    <FiMicOff />
-                    Stop Recording
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    onClick={handleStart}
-                    className="px-6 py-3 bg-red-600 text-white rounded-full hover:bg-red-700 flex items-center gap-2"
-                  >
-                    <FiMic />
-                    Record Again
-                  </button>
-                  <button
-                    onClick={handleReset}
-                    className="px-6 py-3 bg-gray-600 text-white rounded-full hover:bg-gray-700 flex items-center gap-2"
-                  >
-                    <FiRefreshCw />
-                    Reset
-                  </button>
-                </>
+                <button
+                  onClick={stopRecording}
+                  className="px-6 py-3 bg-gray-600 text-white rounded-full hover:bg-gray-700 flex items-center gap-2"
+                >
+                  <FiMicOff />
+                  Stop Recording
+                </button>
+              ) : null}
+
+              {(finalText || interimText || isManualMode) && !isRecording && (
+                <button
+                  onClick={handleReset}
+                  className="px-6 py-3 bg-gray-600 text-white rounded-full hover:bg-gray-700 flex items-center gap-2"
+                >
+                  <FiRefreshCw />
+                  Reset
+                </button>
               )}
             </div>
 
-            {isRecording && !isPaused && (
+            {isRecording && (
               <div className="mt-4 text-center">
                 <div className="inline-flex items-center gap-2 px-4 py-2 bg-red-100 text-red-700 rounded-full">
                   <div className="w-3 h-3 bg-red-600 rounded-full animate-pulse"></div>
-                  <span className="font-medium">Recording in progress...</span>
+                  <span className="font-medium">
+                    Recording in progress... Speak clearly!
+                  </span>
                 </div>
               </div>
             )}
 
-            {isRecording && isPaused && (
+            {isManualMode && (
               <div className="mt-4 text-center">
-                <div className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-100 text-yellow-700 rounded-full">
-                  <FiPause />
-                  <span className="font-medium">Recording paused</span>
+                <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-full">
+                  <FiEdit3 />
+                  <span className="font-medium">
+                    Manual typing mode - Type your response below
+                  </span>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Spoken Text Display */}
+          {/* Response Text Area */}
           <div className="mb-8">
             <div className="flex items-center justify-between mb-2">
               <h4 className="font-semibold text-gray-900">Your Response:</h4>
-              {(spokenText || interimText) && (
+              {(finalText || interimText) && (
                 <span className="text-sm text-gray-500">
                   {getWordCount()} words
                 </span>
               )}
             </div>
-            <div className="border-2 border-gray-200 rounded-lg p-4 min-h-[200px] bg-gray-50">
-              <p className="text-gray-800 leading-relaxed whitespace-pre-wrap">
-                {spokenText}
-                {interimText && (
-                  <span className="text-gray-500 italic">{interimText}</span>
-                )}
-                {!spokenText && !interimText && (
-                  <span className="text-gray-400 italic">
-                    Your spoken text will appear here as you speak...
-                  </span>
-                )}
-              </p>
-            </div>
+
+            {isManualMode ? (
+              <textarea
+                value={finalText}
+                onChange={handleTextChange}
+                placeholder="Type your response here..."
+                className="w-full border-2 border-gray-200 rounded-lg p-4 min-h-[200px] bg-white text-gray-800 leading-relaxed resize-none focus:outline-none focus:border-blue-400 transition-colors"
+                autoFocus
+              />
+            ) : (
+              <div className="border-2 border-gray-200 rounded-lg p-4 min-h-[200px] bg-gray-50">
+                <p className="text-gray-800 leading-relaxed whitespace-pre-wrap">
+                  {getDisplayText()}
+                  {!finalText && !interimText && (
+                    <span className="text-gray-400 italic">
+                      Your spoken text will appear here as you speak...
+                    </span>
+                  )}
+                </p>
+              </div>
+            )}
+
             {getWordCount() > 0 && getWordCount() < 20 && (
               <p className="text-sm text-yellow-600 mt-2">
-                ⚠️ Minimum 20 words required. Keep speaking! (
-                {20 - getWordCount()} more words needed)
+                ⚠️ Minimum 20 words required. {isManualMode ? "Type" : "Speak"}{" "}
+                more! ({20 - getWordCount()} more words needed)
               </p>
             )}
           </div>

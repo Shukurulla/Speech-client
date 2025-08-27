@@ -11,6 +11,8 @@ import LessonTests from "./pages/LessonTests";
 import TestQuestions from "./pages/TestQuestions.jsx";
 import UserService from "./service/user.service";
 import { useDispatch, useSelector } from "react-redux";
+// import TopicTestResult from "./pages/TopicTestResult";
+import Notifications from "./pages/Notifications";
 
 // Admin Components
 import AdminDashboard from "./pages/admin/Dashboard";
@@ -174,6 +176,11 @@ function App() {
         {/* Results Page */}
         <Route path="/results" element={<StudentResults />} />
         <Route path="/results/:resultId" element={<StudentResults />} />
+        <Route path="/notifications" element={<Notifications />} />
+        <Route
+          path="/topic-test-result/:resultId"
+          element={<TopicTestResult />}
+        />
 
         {/* Topic Speaking Test Routes */}
         <Route
