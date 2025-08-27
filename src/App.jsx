@@ -15,7 +15,7 @@ import { useDispatch, useSelector } from "react-redux";
 import Notifications from "./pages/Notifications";
 
 // Admin Components
-import AdminDashboard from "./pages/admin/Dashboard";
+import AdminDashboard from "./pages/admin/dashboard.jsx";
 import AdminStudents from "./pages/admin/Students";
 import AdminGrades from "./pages/admin/Grades";
 import AdminLessons from "./pages/admin/Lessons";
