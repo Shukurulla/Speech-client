@@ -1,5 +1,11 @@
 import React, { useState, useRef, useEffect } from "react";
-import { FiActivity, FiAward, FiVolume2 } from "react-icons/fi";
+import {
+  FiActivity,
+  FiAward,
+  FiVolume2,
+  FiMic,
+  FiMicOff,
+} from "react-icons/fi";
 
 const SpeechTest = ({
   testDetail,
@@ -22,12 +28,16 @@ const SpeechTest = ({
   const [showQuitModal, setShowQuitModal] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [recognitionSupported, setRecognitionSupported] = useState(true);
+  const [recognitionError, setRecognitionError] = useState(null);
 
   const recognitionRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const timerRef = useRef(null);
   const finalTranscriptRef = useRef("");
+  const recognitionActiveRef = useRef(false);
+  const streamRef = useRef(null);
 
   // Check microphone permission and initialize on component mount
   useEffect(() => {
@@ -38,12 +48,16 @@ const SpeechTest = ({
       if (recognitionRef.current) {
         try {
           recognitionRef.current.stop();
+          recognitionRef.current = null;
         } catch (e) {
           console.log("Recognition cleanup:", e);
         }
       }
       if (timerRef.current) {
         clearTimeout(timerRef.current);
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
       }
     };
   }, []);
@@ -70,7 +84,9 @@ const SpeechTest = ({
     setAudioBlob(null);
     setShowResults(false);
     setIsProcessing(false);
+    setRecognitionError(null);
     finalTranscriptRef.current = "";
+    recognitionActiveRef.current = false;
 
     if (recognitionRef.current) {
       try {
@@ -81,6 +97,10 @@ const SpeechTest = ({
     }
     if (timerRef.current) {
       clearTimeout(timerRef.current);
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
     }
   };
 
@@ -114,66 +134,88 @@ const SpeechTest = ({
       !("SpeechRecognition" in window)
     ) {
       console.error("Speech recognition not supported");
+      setRecognitionSupported(false);
+      setRecognitionError(
+        "Speech recognition is not supported in your browser. Please try Chrome or Edge."
+      );
       return;
     }
 
     const SpeechRecognition =
       window.SpeechRecognition || window.webkitSpeechRecognition;
-    recognitionRef.current = new SpeechRecognition();
 
-    const recognition = recognitionRef.current;
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = "en-US";
-    recognition.maxAlternatives = 1;
+    try {
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = true;
+      recognitionRef.current.interimResults = true;
+      recognitionRef.current.lang = "en-US";
 
-    recognition.onstart = () => {
-      console.log("Speech recognition started");
-      setIsListening(true);
-    };
+      recognitionRef.current.onresult = (event) => {
+        let interimTranscript = "";
+        let finalTranscript = "";
 
-    recognition.onresult = (event) => {
-      let interimTranscript = "";
-      let finalTranscript = finalTranscriptRef.current;
-
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-
-        if (event.results[i].isFinal) {
-          finalTranscript += transcript + " ";
-        } else {
-          interimTranscript += transcript;
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+          } else {
+            interimTranscript += event.results[i][0].transcript;
+          }
         }
-      }
 
-      finalTranscriptRef.current = finalTranscript;
-      setRecordedText(finalTranscript + interimTranscript);
-    };
-
-    recognition.onerror = (event) => {
-      console.error("Speech recognition error:", event.error);
-      if (event.error === "not-allowed") {
-        setMicrophonePermission("denied");
-      }
-    };
-
-    recognition.onend = () => {
-      console.log("Speech recognition ended");
-      setIsListening(false);
-
-      // Auto-restart if still recording
-      if (testPhase === "recording") {
-        try {
-          setTimeout(() => {
-            if (recognitionRef.current && testPhase === "recording") {
-              recognitionRef.current.start();
-            }
-          }, 100);
-        } catch (error) {
-          console.error("Failed to restart recognition:", error);
+        if (finalTranscript) {
+          finalTranscriptRef.current += " " + finalTranscript;
+          setRecordedText(finalTranscriptRef.current.trim());
+        } else if (interimTranscript) {
+          const displayText =
+            finalTranscriptRef.current + " " + interimTranscript;
+          setRecordedText(displayText.trim());
         }
-      }
-    };
+      };
+
+      recognitionRef.current.onerror = (event) => {
+        console.error("Speech recognition error:", event.error);
+        setRecognitionError(event.error);
+
+        if (event.error === "no-speech") {
+          console.log("No speech detected");
+          // Don't restart automatically - let the user speak
+        } else if (event.error === "audio-capture") {
+          alert(
+            "No microphone was found. Ensure that a microphone is installed."
+          );
+          stopRecording();
+        } else if (event.error === "not-allowed") {
+          alert("Permission to use microphone is blocked.");
+          setMicrophonePermission("denied");
+          stopRecording();
+        }
+      };
+
+      recognitionRef.current.onend = () => {
+        console.log("Recognition ended");
+        setIsListening(false);
+        recognitionActiveRef.current = false;
+
+        // Only restart if we're still in recording mode
+        if (testPhase === "recording" && recognitionRef.current) {
+          try {
+            setTimeout(() => {
+              if (testPhase === "recording") {
+                recognitionRef.current.start();
+                recognitionActiveRef.current = true;
+                setIsListening(true);
+              }
+            }, 300);
+          } catch (e) {
+            console.error("Error restarting recognition:", e);
+          }
+        }
+      };
+    } catch (error) {
+      console.error("Error initializing speech recognition:", error);
+      setRecognitionSupported(false);
+      setRecognitionError("Failed to initialize speech recognition");
+    }
   };
 
   const requestMicrophonePermission = async () => {
@@ -206,6 +248,11 @@ const SpeechTest = ({
   const startRecording = async () => {
     if (microphonePermission !== "granted") {
       await requestMicrophonePermission();
+      if (microphonePermission !== "granted") return;
+    }
+
+    if (!recognitionSupported) {
+      alert("Speech recognition is not supported in your browser.");
       return;
     }
 
@@ -216,6 +263,7 @@ const SpeechTest = ({
       finalTranscriptRef.current = "";
       setIsRecording(true);
       setIsProcessing(false);
+      setRecognitionError(null);
 
       // Start audio recording
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -225,6 +273,8 @@ const SpeechTest = ({
           sampleRate: 44100,
         },
       });
+
+      streamRef.current = stream;
 
       mediaRecorderRef.current = new MediaRecorder(stream);
       audioChunksRef.current = [];
@@ -240,21 +290,27 @@ const SpeechTest = ({
           type: "audio/webm",
         });
         setAudioBlob(audioBlob);
-        stream.getTracks().forEach((track) => track.stop());
       };
 
       mediaRecorderRef.current.start(100);
 
       // Start speech recognition
-      setTimeout(() => {
-        if (recognitionRef.current) {
-          try {
+      if (recognitionRef.current && !recognitionActiveRef.current) {
+        try {
+          recognitionRef.current.start();
+          recognitionActiveRef.current = true;
+          setIsListening(true);
+        } catch (error) {
+          console.error("Error starting speech recognition:", error);
+          // Try to reinitialize if there's an error
+          await initializeSpeechRecognition();
+          if (recognitionRef.current) {
             recognitionRef.current.start();
-          } catch (error) {
-            console.error("Error starting speech recognition:", error);
+            recognitionActiveRef.current = true;
+            setIsListening(true);
           }
         }
-      }, 500);
+      }
     } catch (error) {
       console.error("Error starting recording:", error);
       alert(
@@ -271,9 +327,10 @@ const SpeechTest = ({
     setIsListening(false);
     setTestPhase("completed");
     setIsProcessing(true);
+    recognitionActiveRef.current = false;
 
     // Stop speech recognition
-    if (recognitionRef.current) {
+    if (recognitionRef.current && recognitionActiveRef.current) {
       try {
         recognitionRef.current.stop();
       } catch (error) {
@@ -291,6 +348,12 @@ const SpeechTest = ({
       } catch (error) {
         console.error("Error stopping media recorder:", error);
       }
+    }
+
+    // Stop stream
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
     }
 
     // Wait a bit for final transcription
@@ -430,6 +493,9 @@ const SpeechTest = ({
     if (speechSynthesis.speaking) {
       speechSynthesis.cancel();
     }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+    }
 
     // Call the onBack function to return to test selection
     onBack();
@@ -464,24 +530,49 @@ const SpeechTest = ({
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4">
           <h2 className="text-xl font-semibold text-gray-900 mb-4 text-center">
-            Mikrofonға ruxsat kerak
+            Microphone Permission Required
           </h2>
           <p className="text-gray-600 mb-6 text-center">
-            Speech test uchun mikrofon kerak. Iltimos, brauzer sozlamalarida
-            ruxsat bering.
+            Speech test requires microphone access. Please enable microphone
+            access in your browser settings.
           </p>
           <div className="flex space-x-4">
             <button
               onClick={requestMicrophonePermission}
               className="flex-1 bg-yellow-400 hover:bg-yellow-500 text-white py-3 px-6 rounded-lg font-semibold transition-colors"
             >
-              Ruxsat berish
+              Grant Permission
             </button>
             <button
               onClick={confirmQuit}
               className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-3 px-6 rounded-lg font-semibold transition-colors"
             >
-              Bekor qilish
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error if speech recognition not supported
+  if (!recognitionSupported) {
+    return (
+      <div className="max-w-4xl mx-auto bg-white rounded-2xl shadow-lg overflow-hidden">
+        <div className="p-8">
+          <div className="text-center">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              Browser Not Supported
+            </h3>
+            <p className="text-gray-600 mb-4">
+              {recognitionError ||
+                "Speech recognition is not supported in your browser. Please try Chrome, Edge, or another WebKit-based browser."}
+            </p>
+            <button
+              onClick={onBack}
+              className="px-6 py-2 bg-yellow-400 text-white rounded-lg font-semibold hover:bg-yellow-500 transition-colors"
+            >
+              Go Back
             </button>
           </div>
         </div>
@@ -618,6 +709,31 @@ const SpeechTest = ({
                   ></div>
                 ))}
               </div>
+
+              {/* Microphone status */}
+              <div className="mb-4 flex justify-center">
+                {isListening ? (
+                  <div className="flex items-center text-green-600">
+                    <FiMic className="mr-2" />
+                    <span>Microphone is active</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center text-gray-500">
+                    <FiMicOff className="mr-2" />
+                    <span>Waiting for speech...</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Error message */}
+              {recognitionError === "no-speech" && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4 max-w-md mx-auto">
+                  <p className="text-yellow-800">
+                    No speech detected. Please speak louder or check your
+                    microphone.
+                  </p>
+                </div>
+              )}
 
               {/* Live Transcription */}
               {recordedText && (
