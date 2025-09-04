@@ -1,4 +1,3 @@
-// src/pages/admin/MockTests.jsx
 import React, { useState, useEffect } from "react";
 import AdminLayout from "../../components/admin/AdminLayout";
 import axios from "../../service/api";
@@ -13,6 +12,7 @@ import {
   FiXCircle,
   FiRefreshCw,
   FiList,
+  FiInfo,
 } from "react-icons/fi";
 
 const AdminMockTests = () => {
@@ -22,6 +22,8 @@ const AdminMockTests = () => {
   const [showModal, setShowModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [showDebugInfo, setShowDebugInfo] = useState(false);
+  const [debugData, setDebugData] = useState(null);
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -49,6 +51,7 @@ const AdminMockTests = () => {
         setSelectedGrade(data.data[0]._id);
       }
     } catch (error) {
+      console.error("Error fetching grades:", error);
       toast.error("Failed to load grades");
     }
   };
@@ -63,10 +66,52 @@ const AdminMockTests = () => {
     } catch (error) {
       if (error.response?.status !== 404) {
         console.error("Error fetching mock test:", error);
+        toast.error("Failed to load mock test");
       }
       setMockTests([]);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const checkGradeDebugInfo = async () => {
+    if (!selectedGrade) {
+      toast.error("Please select a grade first");
+      return;
+    }
+
+    try {
+      const { data } = await axios.get(
+        `/mock-test/debug/grade/${selectedGrade}`
+      );
+      console.log("Debug info:", data);
+      setDebugData(data.data);
+      setShowDebugInfo(true);
+
+      const { summary } = data.data;
+
+      if (summary.readyForMockTest) {
+        toast.success(
+          `Grade is ready! Found ${summary.lessonsWithValidTests} lessons with valid tests.`
+        );
+      } else {
+        toast.warning(
+          `Grade not ready. Only ${summary.lessonsWithValidTests} lessons have valid tests. Need ${summary.missingLessons} more.`
+        );
+      }
+
+      // Show detailed info in console
+      console.table(
+        data.data.lessons.map((l) => ({
+          Lesson: l.lessonNumber,
+          Title: l.lessonTitle,
+          Tests: l.testsCount,
+          HasValidTests: l.hasValidTests ? "Yes" : "No",
+        }))
+      );
+    } catch (error) {
+      console.error("Debug error:", error);
+      toast.error(error.response?.data?.message || "Failed to get debug info");
     }
   };
 
@@ -88,17 +133,24 @@ const AdminMockTests = () => {
 
     setIsGenerating(true);
     try {
+      console.log("Generating mock test for grade:", selectedGrade);
+      console.log("Form data:", formData);
+
       const { data } = await axios.post(
         `/mock-test/generate/${selectedGrade}`,
         formData
       );
+
+      console.log("Mock test generated:", data);
       toast.success("Mock test generated successfully!");
       fetchMockTest();
       closeModal();
     } catch (error) {
-      toast.error(
-        error.response?.data?.message || "Failed to generate mock test"
-      );
+      console.error("Error generating mock test:", error);
+      const errorMessage =
+        error.response?.data?.message || "Failed to generate mock test";
+      console.error("Error message:", errorMessage);
+      toast.error(errorMessage);
     } finally {
       setIsGenerating(false);
     }
@@ -131,9 +183,11 @@ const AdminMockTests = () => {
   };
 
   const openModal = () => {
+    const selectedGradeName =
+      grades.find((g) => g._id === selectedGrade)?.name || "";
     setFormData({
-      title: `Mock Test - ${new Date().toLocaleDateString()}`,
-      description: "Comprehensive test covering all 20 lessons",
+      title: `Mock Test - ${selectedGradeName} - ${new Date().toLocaleDateString()}`,
+      description: `Comprehensive test covering all 20 lessons for ${selectedGradeName}`,
       timeLimit: 60,
       passingScore: 60,
     });
@@ -189,15 +243,26 @@ const AdminMockTests = () => {
                 ))}
               </select>
             </div>
-            {selectedGradeName && !currentMockTest && (
-              <button
-                onClick={openModal}
-                className="ml-4 px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2"
-              >
-                <FiPlus />
-                Generate Mock Test
-              </button>
-            )}
+            <div className="flex gap-2 ml-4">
+              {selectedGradeName && (
+                <button
+                  onClick={() => checkGradeDebugInfo()}
+                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 flex items-center gap-2"
+                >
+                  <FiInfo />
+                  Debug Info
+                </button>
+              )}
+              {selectedGradeName && !currentMockTest && (
+                <button
+                  onClick={openModal}
+                  className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2"
+                >
+                  <FiPlus />
+                  Generate Mock Test
+                </button>
+              )}
+            </div>
           </div>
           {selectedGradeName && (
             <p className="mt-2 text-sm text-gray-600">
@@ -296,20 +361,28 @@ const AdminMockTests = () => {
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">
                   Questions Distribution
                 </h3>
-                <div className="bg-gray-50 rounded-lg p-4">
+                <div className="bg-purple-50 rounded-lg p-4">
                   <p className="text-gray-700 mb-3">
                     This mock test contains one question from each of the
                     following lessons:
                   </p>
                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2">
-                    {[...Array(20)].map((_, i) => (
+                    {currentMockTest.questions?.map((question, i) => (
                       <div
-                        key={i}
-                        className="bg-white rounded px-3 py-2 text-center text-sm font-medium text-gray-700 border border-gray-200"
+                        key={question._id || i}
+                        className="bg-white rounded px-3 py-2 text-center text-sm font-medium text-gray-700 border border-purple-200"
                       >
-                        Lesson {i + 1}
+                        Lesson {question.lessonNumber}
                       </div>
-                    ))}
+                    )) ||
+                      [...Array(20)].map((_, i) => (
+                        <div
+                          key={i}
+                          className="bg-white rounded px-3 py-2 text-center text-sm font-medium text-gray-700 border border-purple-200"
+                        >
+                          Lesson {i + 1}
+                        </div>
+                      ))}
                   </div>
                 </div>
               </div>
@@ -469,6 +542,130 @@ const AdminMockTests = () => {
           </div>
         )}
 
+        {/* Debug Info Modal */}
+        {showDebugInfo && debugData && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-xl max-w-6xl w-full max-h-[80vh] overflow-y-auto">
+              <div className="p-6 border-b border-gray-200 sticky top-0 bg-white">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-semibold text-gray-900">
+                    Debug Information - {debugData.grade.name}
+                  </h3>
+                  <button
+                    onClick={() => setShowDebugInfo(false)}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6">
+                {/* Summary */}
+                <div className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-blue-50 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-blue-600">
+                      {debugData.summary.totalLessons}
+                    </div>
+                    <p className="text-sm text-blue-800">Total Lessons</p>
+                  </div>
+                  <div className="bg-green-50 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-green-600">
+                      {debugData.summary.lessonsWithValidTests}
+                    </div>
+                    <p className="text-sm text-green-800">Valid Lessons</p>
+                  </div>
+                  <div className="bg-purple-50 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-purple-600">
+                      {debugData.summary.missingLessons}
+                    </div>
+                    <p className="text-sm text-purple-800">Missing</p>
+                  </div>
+                  <div
+                    className={`rounded-lg p-4 text-center ${
+                      debugData.summary.readyForMockTest
+                        ? "bg-green-100"
+                        : "bg-red-100"
+                    }`}
+                  >
+                    <div
+                      className={`text-2xl font-bold ${
+                        debugData.summary.readyForMockTest
+                          ? "text-green-600"
+                          : "text-red-600"
+                      }`}
+                    >
+                      {debugData.summary.readyForMockTest ? "✓" : "✗"}
+                    </div>
+                    <p
+                      className={`text-sm ${
+                        debugData.summary.readyForMockTest
+                          ? "text-green-800"
+                          : "text-red-800"
+                      }`}
+                    >
+                      Ready
+                    </p>
+                  </div>
+                </div>
+
+                {/* Lessons Details */}
+                <div className="space-y-2">
+                  {debugData.lessons.map((lesson) => (
+                    <div
+                      key={lesson.lessonId}
+                      className={`border rounded-lg p-4 ${
+                        lesson.hasValidTests
+                          ? "border-green-200 bg-green-50"
+                          : "border-red-200 bg-red-50"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="font-semibold">
+                            Lesson {lesson.lessonNumber}: {lesson.lessonTitle}
+                          </h4>
+                          <p className="text-sm text-gray-600">
+                            Tests: {lesson.testsCount} | Valid:{" "}
+                            {lesson.hasValidTests ? "Yes" : "No"}
+                          </p>
+                        </div>
+                        <div
+                          className={`px-3 py-1 rounded-full text-sm font-medium ${
+                            lesson.hasValidTests
+                              ? "bg-green-100 text-green-800"
+                              : "bg-red-100 text-red-800"
+                          }`}
+                        >
+                          {lesson.hasValidTests ? "Ready" : "Not Ready"}
+                        </div>
+                      </div>
+                      {lesson.tests.length > 0 && (
+                        <div className="mt-2">
+                          <div className="text-xs text-gray-500 mb-1">
+                            Tests:
+                          </div>
+                          <div className="space-y-1">
+                            {lesson.tests.map((test, idx) => (
+                              <div
+                                key={idx}
+                                className="text-xs bg-white rounded p-2"
+                              >
+                                {test.testTitle} ({test.testType}) -{" "}
+                                {test.questionsCount} questions
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Results Modal */}
         {showResultsModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -495,8 +692,8 @@ const AdminMockTests = () => {
                         <div className="flex items-center justify-between mb-2">
                           <div>
                             <p className="font-semibold text-gray-900">
-                              {result.userId?.firstName}{" "}
-                              {result.userId?.lastName}
+                              {result.userId?.firstname}{" "}
+                              {result.userId?.lastname}
                             </p>
                             <p className="text-sm text-gray-600">
                               {new Date(result.createdAt).toLocaleDateString()}

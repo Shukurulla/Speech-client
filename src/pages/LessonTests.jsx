@@ -37,8 +37,8 @@ const LessonTests = () => {
   const [topicTest, setTopicTest] = useState(null);
   const [showTopicTest, setShowTopicTest] = useState(false);
 
-  // Mock test state
-  const [showMockTest, setShowMockTest] = useState(false);
+  // Mock test state - har doim ko'rsatiladi
+  const [showMockTest, setShowMockTest] = useState(true);
 
   // Test history states
   const [testHistory, setTestHistory] = useState([]);
@@ -99,10 +99,8 @@ const LessonTests = () => {
         }
       }
 
-      // Check if this is lesson 20 for mock test
-      if (lessonNumber === 20) {
-        setShowMockTest(true);
-      }
+      // Mock test har doim ko'rsatiladi - lesson raqamiga qaramay
+      setShowMockTest(true);
     } catch (error) {
       console.log("Error checking topic test:", error);
     }
@@ -245,7 +243,9 @@ const LessonTests = () => {
   };
 
   const handleStartMockTest = () => {
-    navigate(`/mock-test/${grade._id}`);
+    navigate(`/mock-test/${grade._id}`, {
+      state: { grade },
+    });
   };
 
   const handleQuestionComplete = (questionId, score, userAnswer) => {
@@ -534,11 +534,10 @@ const LessonTests = () => {
               />
             )}
 
-            {/* Mock Test Card - Shows only for lesson 20 */}
+            {/* Mock Test Card - Shows for all lessons now */}
             {showMockTest && (
               <MockTestCard
                 gradeId={grade?._id}
-                isCompleted={completedTests.mock}
                 onStart={handleStartMockTest}
               />
             )}
@@ -697,21 +696,16 @@ const TopicTestCard = ({
   );
 };
 
-// Mock Test Card Component
-const MockTestCard = ({ gradeId, isCompleted, onStart }) => {
+// Mock Test Card Component - Sodda versiya (cheklovsiz)
+const MockTestCard = ({ gradeId, onStart }) => {
   return (
     <div className="bg-white rounded-xl shadow-sm border-2 border-orange-200 p-8 transition-all duration-300 hover:shadow-lg">
       <div className="text-center">
         {/* Icon */}
-        <div className="relative inline-block mb-6">
+        <div className="inline-block mb-6">
           <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center text-white">
             <FiFileText size={32} />
           </div>
-          {isCompleted && (
-            <div className="absolute -top-2 -right-2 w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-              <FiCheck className="text-white text-sm" />
-            </div>
-          )}
         </div>
 
         {/* Content */}
@@ -733,7 +727,7 @@ const MockTestCard = ({ gradeId, isCompleted, onStart }) => {
             <span>•</span>
             <span>60 Minutes</span>
             <span>•</span>
-            <span>80% Pass</span>
+            <span>60% Pass</span>
           </div>
         </div>
 
@@ -742,7 +736,7 @@ const MockTestCard = ({ gradeId, isCompleted, onStart }) => {
           onClick={onStart}
           className="w-full py-3 px-6 rounded-lg font-semibold transition-colors bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white"
         >
-          {isCompleted ? "Retake Mock Test" : "Start Mock Test"}
+          Start Mock Test
         </button>
       </div>
     </div>

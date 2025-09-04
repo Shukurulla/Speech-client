@@ -1,6 +1,6 @@
 import axios from "axios";
 
-axios.defaults.baseURL = "https://speech.kerek.uz/api";
+axios.defaults.baseURL = "http://localhost:5555/api";
 
 axios.interceptors.request.use((option) => {
   const token = localStorage.getItem("speech-token")
