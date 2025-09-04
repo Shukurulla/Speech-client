@@ -10,60 +10,57 @@ import {
   FiAward,
   FiArrowRight,
   FiArrowLeft,
+  FiHome,
 } from "react-icons/fi";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { toast } from "react-hot-toast";
+import SpeechTest from "../components/SpeechTest";
+import ListeningTest from "../components/ListeningTest";
 
-const MockTest = ({ onComplete, onBack }) => {
-  const [mockTestQuestions, setMockTestQuestions] = useState([]);
+const MockTest = () => {
+  const [mockTest, setMockTest] = useState(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [testPhase, setTestPhase] = useState("overview"); // overview, testing, completed
+  const [testPhase, setTestPhase] = useState("loading"); // loading, overview, testing, completed
   const [testResults, setTestResults] = useState([]);
   const [testStartTime, setTestStartTime] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const { gradeId } = useParams();
-  useEffect(() => {
-    console.log(gradeId);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-    fetchMockTestQuestions();
+  const { gradeId } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    fetchMockTest();
   }, [gradeId]);
 
-  const fetchMockTestQuestions = async () => {
+  const fetchMockTest = async () => {
     try {
       setIsLoading(true);
       const { data } = await axios.get(`/mock-test/grade/${gradeId}`);
-      console.log(data);
-      setMockTestQuestions(data.data.questions);
+
+      if (data.status === "success" && data.data) {
+        setMockTest(data.data);
+        setTestPhase("overview");
+      } else {
+        toast.error("Mock test not found for this grade");
+        navigate(-1);
+      }
     } catch (error) {
       console.error("Error fetching mock test:", error);
+      toast.error("Failed to load mock test");
+      navigate(-1);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const generateMockTestData = () => {
-    // This would be replaced with actual API call
-    const questions = [];
-    for (let i = 1; i <= 20; i++) {
-      questions.push({
-        id: i,
-        lessonNumber: i,
-        lessonTitle: `Lesson ${i}`,
-        type: i % 2 === 0 ? "listening" : "speech",
-        question: {
-          condition:
-            i % 2 === 0
-              ? "Listen carefully and write what you hear"
-              : "Read the following text aloud",
-          text: `This is sample text for lesson ${i}. Practice your ${
-            i % 2 === 0 ? "listening" : "speaking"
-          } skills.`,
-        },
-      });
-    }
-    return questions;
-  };
-
   const startMockTest = () => {
+    if (!mockTest || !mockTest.questions || mockTest.questions.length === 0) {
+      toast.error("No questions available in this mock test");
+      return;
+    }
+
     setTestPhase("testing");
     setTestStartTime(Date.now());
     setCurrentQuestionIndex(0);
@@ -71,55 +68,117 @@ const MockTest = ({ onComplete, onBack }) => {
   };
 
   const handleQuestionComplete = (questionId, score, userAnswer) => {
+    const currentQuestion = mockTest.questions[currentQuestionIndex];
+
     const result = {
-      questionId,
-      score,
-      userAnswer,
-      timestamp: Date.now(),
+      questionId: currentQuestion.testDetailId._id,
+      lessonNumber: currentQuestion.lessonNumber,
+      questionType: currentQuestion.questionType,
+      userAnswer: userAnswer || "",
+      correctAnswer: currentQuestion.testDetailId.text || "",
+      isCorrect: score >= 70,
+      score: Math.round(score),
+      timeSpent: Math.round((Date.now() - testStartTime) / 1000),
     };
 
-    setTestResults((prev) => [...prev, result]);
+    // Update results array
+    setTestResults((prev) => {
+      const filtered = prev.filter((r) => r.questionId !== questionId);
+      return [...filtered, result];
+    });
 
-    if (currentQuestionIndex < mockTestQuestions.length - 1) {
+    // Auto-proceed to next question after a short delay
+    setTimeout(() => {
+      if (currentQuestionIndex < mockTest.questions.length - 1) {
+        setCurrentQuestionIndex((prev) => prev + 1);
+      } else {
+        completeMockTest();
+      }
+    }, 500);
+  };
+
+  const handleNext = () => {
+    if (currentQuestionIndex < mockTest.questions.length - 1) {
       setCurrentQuestionIndex((prev) => prev + 1);
     } else {
       completeMockTest();
     }
   };
 
-  const completeMockTest = () => {
-    const totalScore =
-      testResults.reduce((sum, r) => sum + r.score, 0) / testResults.length;
-    const timeTaken = Math.round((Date.now() - testStartTime) / 1000);
+  const handleQuitTest = () => {
+    if (
+      window.confirm(
+        "Are you sure you want to quit the test? Your progress will be lost."
+      )
+    ) {
+      navigate(-1);
+    }
+  };
 
-    setTestPhase("completed");
+  const completeMockTest = async () => {
+    if (isSubmitting) return;
 
-    if (onComplete) {
-      onComplete({
-        score: Math.round(totalScore),
-        timeTaken,
-        totalQuestions: mockTestQuestions.length,
-        results: testResults,
+    try {
+      setIsSubmitting(true);
+
+      const totalTimeSpent = Math.round((Date.now() - testStartTime) / 1000);
+
+      // Submit results to backend
+      const { data } = await axios.post("/mock-test/submit", {
+        mockTestId: mockTest._id,
+        answers: testResults,
+        totalTimeSpent,
       });
+
+      if (data.status === "success") {
+        toast.success("Mock test completed successfully!");
+
+        // Navigate to result page
+        navigate(`/mock-test/result/${data.data._id}`, {
+          state: { resultData: data.data },
+        });
+      }
+    } catch (error) {
+      console.error("Error submitting mock test:", error);
+      toast.error("Failed to submit test results");
+
+      // Show local results even if submission fails
+      setTestPhase("completed");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleNext = () => {
-    if (currentQuestionIndex < mockTestQuestions.length - 1) {
-      setCurrentQuestionIndex((prev) => prev + 1);
-    }
-  };
-
-  const handlePrevious = () => {
-    if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex((prev) => prev - 1);
-    }
-  };
-
+  // Loading state
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  // No mock test found
+  if (!mockTest) {
+    return (
+      <div className="max-w-4xl mx-auto p-6">
+        <div className="bg-white rounded-2xl shadow-lg p-8">
+          <div className="text-center">
+            <div className="text-gray-400 text-6xl mb-4">📝</div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+              No Mock Test Available
+            </h2>
+            <p className="text-gray-600 mb-6">
+              Mock test for this grade hasn't been created yet.
+            </p>
+            <button
+              onClick={() => navigate(-1)}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700"
+            >
+              Go Back
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -131,9 +190,10 @@ const MockTest = ({ onComplete, onBack }) => {
         <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
           {/* Header */}
           <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-8 text-white">
-            <h1 className="text-3xl font-bold mb-2">Mock Test</h1>
+            <h1 className="text-3xl font-bold mb-2">{mockTest.title}</h1>
             <p className="text-blue-100">
-              Complete assessment covering all 20 lessons
+              {mockTest.description ||
+                "Complete assessment covering all lessons"}
             </p>
           </div>
 
@@ -146,7 +206,9 @@ const MockTest = ({ onComplete, onBack }) => {
                     <FiBook className="text-blue-600" />
                   </div>
                   <div>
-                    <div className="text-2xl font-bold text-gray-900">20</div>
+                    <div className="text-2xl font-bold text-gray-900">
+                      {mockTest.totalQuestions}
+                    </div>
                     <div className="text-sm text-gray-600">Questions</div>
                   </div>
                 </div>
@@ -158,7 +220,9 @@ const MockTest = ({ onComplete, onBack }) => {
                     <FiClock className="text-purple-600" />
                   </div>
                   <div>
-                    <div className="text-2xl font-bold text-gray-900">40</div>
+                    <div className="text-2xl font-bold text-gray-900">
+                      {mockTest.timeLimit}
+                    </div>
                     <div className="text-sm text-gray-600">Minutes</div>
                   </div>
                 </div>
@@ -170,7 +234,9 @@ const MockTest = ({ onComplete, onBack }) => {
                     <FiAward className="text-green-600" />
                   </div>
                   <div>
-                    <div className="text-2xl font-bold text-gray-900">80%</div>
+                    <div className="text-2xl font-bold text-gray-900">
+                      {mockTest.passingScore}%
+                    </div>
                     <div className="text-sm text-gray-600">Pass Score</div>
                   </div>
                 </div>
@@ -185,11 +251,25 @@ const MockTest = ({ onComplete, onBack }) => {
               <div className="space-y-3">
                 <div className="flex items-center space-x-3">
                   <FiMic className="text-blue-600" />
-                  <span className="text-gray-700">10 Speaking Questions</span>
+                  <span className="text-gray-700">
+                    {
+                      mockTest.questions.filter(
+                        (q) => q.questionType === "speech"
+                      ).length
+                    }{" "}
+                    Speaking Questions
+                  </span>
                 </div>
                 <div className="flex items-center space-x-3">
                   <FiHeadphones className="text-purple-600" />
-                  <span className="text-gray-700">10 Listening Questions</span>
+                  <span className="text-gray-700">
+                    {
+                      mockTest.questions.filter(
+                        (q) => q.questionType === "listening"
+                      ).length
+                    }{" "}
+                    Listening Questions
+                  </span>
                 </div>
               </div>
             </div>
@@ -205,14 +285,14 @@ const MockTest = ({ onComplete, onBack }) => {
                 </li>
                 <li>• Find a quiet place to complete the test</li>
                 <li>• You cannot pause once the test begins</li>
-                <li>• Each question is taken from your completed lessons</li>
+                <li>• Each question will be evaluated automatically</li>
               </ul>
             </div>
 
             {/* Action Buttons */}
             <div className="flex space-x-4">
               <button
-                onClick={onBack}
+                onClick={() => navigate(-1)}
                 className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 transition-colors"
               >
                 Back to Lessons
@@ -231,16 +311,108 @@ const MockTest = ({ onComplete, onBack }) => {
     );
   }
 
-  // Test Completed Screen
+  // Testing Phase - Show actual test components
+  if (testPhase === "testing" && mockTest.questions[currentQuestionIndex]) {
+    const currentQuestion = mockTest.questions[currentQuestionIndex];
+    const testDetail = currentQuestion.testDetailId;
+
+    // Prepare test detail data
+    const testDetailData = {
+      _id: testDetail._id,
+      condition: testDetail.condition,
+      text: testDetail.text,
+      lessonNumber: currentQuestion.lessonNumber,
+      lessonTitle:
+        currentQuestion.lessonId?.title ||
+        `Lesson ${currentQuestion.lessonNumber}`,
+    };
+
+    // Choose component based on question type
+    const TestComponent =
+      currentQuestion.questionType === "listening" ? ListeningTest : SpeechTest;
+
+    return (
+      <div className="min-h-screen bg-gray-50 py-6">
+        {/* Progress Header */}
+        <div className="max-w-4xl mx-auto px-6 mb-4">
+          <div className="bg-white rounded-lg shadow-sm p-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center space-x-4">
+                <span className="text-sm font-medium text-gray-700">
+                  Mock Test Progress
+                </span>
+                <span className="text-sm text-gray-500">
+                  {currentQuestion.lessonId?.title ||
+                    `Lesson ${currentQuestion.lessonNumber}`}
+                </span>
+              </div>
+              <div className="flex items-center space-x-2">
+                {currentQuestion.questionType === "listening" ? (
+                  <FiHeadphones className="text-purple-600" />
+                ) : (
+                  <FiMic className="text-blue-600" />
+                )}
+                <span className="text-sm capitalize">
+                  {currentQuestion.questionType}
+                </span>
+              </div>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div
+                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                style={{
+                  width: `${
+                    ((currentQuestionIndex + 1) / mockTest.questions.length) *
+                    100
+                  }%`,
+                }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Test Component */}
+        <TestComponent
+          testDetail={testDetailData}
+          onNext={handleNext}
+          onBack={handleQuitTest}
+          hasNext={currentQuestionIndex < mockTest.questions.length - 1}
+          onComplete={handleQuestionComplete}
+          questionNumber={currentQuestionIndex + 1}
+          totalQuestions={mockTest.questions.length}
+        />
+      </div>
+    );
+  }
+
+  // Submitting state
+  if (isSubmitting) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <h3 className="text-lg font-semibold text-gray-900">
+            Submitting your test results...
+          </h3>
+        </div>
+      </div>
+    );
+  }
+
+  // Local Completed Screen (fallback if submission fails)
   if (testPhase === "completed") {
     const totalScore =
-      testResults.reduce((sum, r) => sum + r.score, 0) / testResults.length;
-    const passed = totalScore >= 80;
+      testResults.length > 0
+        ? Math.round(
+            testResults.reduce((sum, r) => sum + r.score, 0) /
+              testResults.length
+          )
+        : 0;
+    const passed = totalScore >= mockTest.passingScore;
 
     return (
       <div className="max-w-4xl mx-auto p-6">
         <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-          {/* Header */}
           <div
             className={`p-8 text-white ${
               passed
@@ -263,74 +435,30 @@ const MockTest = ({ onComplete, onBack }) => {
             </div>
           </div>
 
-          {/* Results */}
           <div className="p-8">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              <div className="text-center">
-                <div className="text-3xl font-bold text-gray-900">
-                  {Math.round(totalScore)}%
-                </div>
-                <div className="text-sm text-gray-600">Overall Score</div>
+            <div className="text-center mb-8">
+              <div className="text-3xl font-bold text-gray-900">
+                {totalScore}%
               </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-gray-900">
-                  {testResults.filter((r) => r.score >= 70).length}/
-                  {mockTestQuestions.length}
-                </div>
-                <div className="text-sm text-gray-600">Questions Passed</div>
-              </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-gray-900">
-                  {Math.round((Date.now() - testStartTime) / 60000)} min
-                </div>
-                <div className="text-sm text-gray-600">Time Taken</div>
-              </div>
+              <div className="text-sm text-gray-600">Overall Score</div>
             </div>
 
-            {/* Detailed Results by Lesson */}
-            <div className="mb-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Results by Lesson
-              </h3>
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {testResults.map((result, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                  >
-                    <span className="font-medium">
-                      Lesson {mockTestQuestions[index]?.lessonNumber}
-                    </span>
-                    <div className="flex items-center space-x-2">
-                      <span
-                        className={`px-2 py-1 rounded text-sm font-medium ${
-                          result.score >= 80
-                            ? "bg-green-100 text-green-800"
-                            : result.score >= 60
-                            ? "bg-yellow-100 text-yellow-800"
-                            : "bg-red-100 text-red-800"
-                        }`}
-                      >
-                        {result.score}%
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Action Buttons */}
             <div className="flex space-x-4">
               <button
-                onClick={onBack}
+                onClick={() =>
+                  navigate(`/grade/${gradeId}`, {
+                    state: location.state,
+                  })
+                }
                 className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 transition-colors"
               >
-                Back to Dashboard
+                Back to Lessons
               </button>
               <button
                 onClick={() => {
                   setTestPhase("overview");
                   setTestResults([]);
+                  setCurrentQuestionIndex(0);
                 }}
                 className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
               >
@@ -343,73 +471,7 @@ const MockTest = ({ onComplete, onBack }) => {
     );
   }
 
-  // Testing Phase - would show actual test components
-  return (
-    <div className="max-w-4xl mx-auto p-6">
-      <div className="bg-white rounded-2xl shadow-lg p-8">
-        <div className="mb-6">
-          {/* Progress Bar */}
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-700">
-              Question {currentQuestionIndex + 1} of {mockTestQuestions.length}
-            </span>
-            <span className="text-sm text-gray-500">
-              {mockTestQuestions[currentQuestionIndex]?.lessonTitle}
-            </span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
-            <div
-              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-              style={{
-                width: `${
-                  ((currentQuestionIndex + 1) / mockTestQuestions.length) * 100
-                }%`,
-              }}
-            />
-          </div>
-        </div>
-
-        {/* Question Content */}
-        <div className="text-center py-12">
-          <h3 className="text-xl font-semibold text-gray-900 mb-4">
-            {mockTestQuestions[currentQuestionIndex]?.type === "listening"
-              ? "Listening Test"
-              : "Speaking Test"}
-          </h3>
-          <p className="text-gray-600 mb-8">
-            From: {mockTestQuestions[currentQuestionIndex]?.lessonTitle}
-          </p>
-
-          {/* This is where you'd render the actual SpeechTest or ListeningTest component */}
-          <div className="bg-gray-50 rounded-lg p-8">
-            <p className="text-gray-500">[Test Component Would Be Here]</p>
-          </div>
-        </div>
-
-        {/* Navigation */}
-        <div className="flex items-center justify-between mt-8">
-          <button
-            onClick={handlePrevious}
-            disabled={currentQuestionIndex === 0}
-            className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center"
-          >
-            <FiArrowLeft className="mr-2" />
-            Previous
-          </button>
-
-          <button
-            onClick={handleNext}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center"
-          >
-            {currentQuestionIndex === mockTestQuestions.length - 1
-              ? "Complete Test"
-              : "Next"}
-            <FiArrowRight className="ml-2" />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+  return null;
 };
 
 export default MockTest;
